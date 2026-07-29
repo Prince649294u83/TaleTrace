@@ -1,0 +1,1 @@
+"""Image receiver module boundary."""
