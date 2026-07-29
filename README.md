@@ -11,4 +11,6 @@ copy .env.example .env
 uvicorn backend.app.main:app --reload
 ```
 
-The backend uses independent domain modules under `backend/app/modules`. Shared configuration, logging, API composition, and utilities are kept separate. The routers are placeholders and contain no endpoints or product behavior.
+The backend uses independent domain modules under `backend/app/modules`. Shared configuration, environment loading, logging, dependency providers, response models, API composition, and utilities are kept separate. The module routers are placeholders and contain no product behavior.
+
+The infrastructure check is available at `GET /api/health`. It returns the common response envelope and is not a product feature.

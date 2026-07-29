@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from backend.app.api.health import router as health_router
 from backend.app.modules.ai_engine.router import router as ai_engine_router
 from backend.app.modules.audio_engine.router import router as audio_engine_router
 from backend.app.modules.database.router import router as database_router
@@ -12,6 +13,7 @@ from backend.app.modules.preprocessing.router import router as preprocessing_rou
 from backend.app.modules.reading_engine.router import router as reading_engine_router
 
 api_router = APIRouter()
+api_router.include_router(health_router)
 
 for module_router in (
     image_receiver_router,
