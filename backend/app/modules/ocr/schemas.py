@@ -1,7 +1,9 @@
-from pydantic import BaseModel
+"""Compatibility exports for OCR API schemas."""
 
-class OcrProcessRequest(BaseModel):
-    frame_reference: str | None = None
+from backend.app.modules.ocr.models import (
+    OcrProcessRequest,
+    OcrProcessResponse,
+    ProcessedImage,
+)
 
-class OcrProcessResponse(BaseModel):
-    status: str
+__all__ = ["OcrProcessRequest", "OcrProcessResponse", "ProcessedImage"]
