@@ -3,9 +3,11 @@
 from pydantic import BaseModel
 
 
-class UploadFrameResponse(BaseModel):
+class UploadResponse(BaseModel):
     status: str = "success"
-    text: str
-    latest_image: str
-    processed_image: str
+    processing: str = "completed"
+    characters: int
     output_file: str
+
+
+UploadFrameResponse = UploadResponse

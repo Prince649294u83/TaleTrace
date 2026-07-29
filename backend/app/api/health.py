@@ -1,23 +1,14 @@
-"""Placeholder health route for infrastructure verification."""
+"""Health routes for the OCR verification service."""
 
-from typing import Annotated
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-
-from backend.app.core.dependencies import SettingsDependency
-from backend.app.models.responses import ResponseEnvelope
+from fastapi import APIRouter
 
 router = APIRouter(tags=["health"])
 
-class HealthRequest(BaseModel):
-    pass
+@router.get("/", response_model=str)
+def service_root() -> str:
+    return "TaleTrace OCR Service Running"
 
-class HealthResponse(BaseModel):
-    status: str
-    environment: str
 
-@router.get("/health", response_model=ResponseEnvelope[HealthResponse])
-def health_check(_request: Annotated[HealthRequest, Depends()], settings: SettingsDependency) -> ResponseEnvelope[HealthResponse]:
-    """Report that the placeholder application process is available."""
-
-    return ResponseEnvelope(data=HealthResponse(status="ok", environment=settings.app_env))
+@router.get("/health")
+def health_check() -> dict[str, str]:
+    return {"status": "healthy"}

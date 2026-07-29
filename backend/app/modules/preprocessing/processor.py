@@ -1,9 +1,9 @@
-"""Deterministic preprocessing for the OCR testing milestone."""
+"""OpenCV preprocessing for the synchronous OCR testing milestone."""
 
-from io import BytesIO
 from pathlib import Path
 
-from PIL import Image, ImageEnhance, ImageFilter, ImageOps, UnidentifiedImageError
+import cv2
+import numpy as np
 
 
 class ImagePreprocessingError(RuntimeError):
@@ -11,24 +11,35 @@ class ImagePreprocessingError(RuntimeError):
 
 
 class ImagePreprocessor:
-    """Convert an image to a high-contrast, sharpened grayscale JPEG."""
+    """Lightly clean and normalize a JPEG without changing its geometry."""
 
     def preprocess(self, image_bytes: bytes, output_path: Path) -> bytes:
-        try:
-            with Image.open(BytesIO(image_bytes)) as source:
-                source.verify()
-            with Image.open(BytesIO(image_bytes)) as source:
-                image = ImageOps.exif_transpose(source).convert("L")
-                image = ImageOps.autocontrast(image)
-                image = ImageEnhance.Contrast(image).enhance(1.5)
-                image = image.filter(ImageFilter.SHARPEN)
+        image = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+        if image is None:
+            raise ImagePreprocessingError("Image is unreadable")
 
-                buffer = BytesIO()
-                image.save(buffer, format="JPEG", quality=95, optimize=True)
-        except (UnidentifiedImageError, OSError, ValueError) as exc:
-            raise ImagePreprocessingError(f"Invalid or unreadable image: {exc}") from exc
+        denoised = cv2.GaussianBlur(image, (3, 3), 0)
+        lab = cv2.cvtColor(denoised, cv2.COLOR_BGR2LAB)
+        lightness, channel_a, channel_b = cv2.split(lab)
+        normalized_lightness = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8)).apply(
+            lightness
+        )
+        processed = cv2.cvtColor(
+            cv2.merge((normalized_lightness, channel_a, channel_b)), cv2.COLOR_LAB2BGR
+        )
 
-        processed_bytes = buffer.getvalue()
+        encoded, buffer = cv2.imencode(
+            ".jpg", processed, [int(cv2.IMWRITE_JPEG_QUALITY), 95]
+        )
+        if not encoded:
+            raise ImagePreprocessingError("OpenCV could not encode the processed image")
+
+        processed_bytes = buffer.tobytes()
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_bytes(processed_bytes)
+        try:
+            output_path.write_bytes(processed_bytes)
+        except OSError as exc:
+            raise ImagePreprocessingError(
+                f"Could not write processed image: {exc}"
+            ) from exc
         return processed_bytes

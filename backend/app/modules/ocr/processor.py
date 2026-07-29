@@ -1,8 +1,8 @@
 """Synchronous Google Cloud Vision adapter for one processed image."""
 
-import base64
-
-import requests
+from google.api_core import exceptions as google_exceptions
+from google.auth.exceptions import DefaultCredentialsError, GoogleAuthError
+from google.cloud import vision
 
 
 class OcrConfigurationError(RuntimeError):
@@ -13,52 +13,40 @@ class OcrProviderError(RuntimeError):
     """Raised when Google Cloud Vision rejects or cannot process the image."""
 
 
+class OcrTimeoutError(OcrProviderError):
+    """Raised when Google Cloud Vision does not respond before the deadline."""
+
+
 class GoogleVisionOcrProcessor:
-    """Call DOCUMENT_TEXT_DETECTION once, without retries."""
+    """Call DOCUMENT_TEXT_DETECTION once using externally configured ADC."""
 
-    endpoint = "https://vision.googleapis.com/v1/images:annotate"
-
-    def __init__(self, api_key: str | None, timeout_seconds: float = 60.0) -> None:
-        self.api_key = api_key
+    def __init__(self, timeout_seconds: float = 60.0) -> None:
         self.timeout_seconds = timeout_seconds
 
     def extract_text(self, image_bytes: bytes) -> str:
-        if not self.api_key:
-            raise OcrConfigurationError(
-                "GOOGLE_CLOUD_VISION_API_KEY is not configured"
-            )
-
-        payload = {
-            "requests": [{
-                "image": {"content": base64.b64encode(image_bytes).decode("ascii")},
-                "features": [{"type": "DOCUMENT_TEXT_DETECTION"}],
-            }]
-        }
         try:
-            response = requests.post(
-                self.endpoint,
-                params={"key": self.api_key},
-                json=payload,
+            client = vision.ImageAnnotatorClient()
+            response = client.document_text_detection(
+                image=vision.Image(content=image_bytes),
                 timeout=self.timeout_seconds,
             )
-        except requests.RequestException as exc:
+        except DefaultCredentialsError as exc:
+            raise OcrConfigurationError(
+                "Google Application Default Credentials are not configured"
+            ) from exc
+        except GoogleAuthError as exc:
+            raise OcrConfigurationError(
+                f"Google authentication failed: {exc}"
+            ) from exc
+        except (google_exceptions.DeadlineExceeded, google_exceptions.ServiceUnavailable) as exc:
+            raise OcrTimeoutError(f"Google Cloud Vision request timed out: {exc}") from exc
+        except google_exceptions.GoogleAPICallError as exc:
             raise OcrProviderError(f"Google Cloud Vision request failed: {exc}") from exc
+        except OSError as exc:
+            raise OcrConfigurationError(f"Google credentials could not be loaded: {exc}") from exc
 
-        if not response.ok:
+        if response.error.message:
             raise OcrProviderError(
-                f"Google Cloud Vision returned HTTP {response.status_code}: "
-                f"{response.text[:500]}"
+                f"Google Cloud Vision OCR failed: {response.error.message}"
             )
-        try:
-            result = response.json()["responses"][0]
-        except (ValueError, KeyError, IndexError, TypeError) as exc:
-            raise OcrProviderError("Google Cloud Vision returned an invalid response") from exc
-
-        if error := result.get("error"):
-            raise OcrProviderError(
-                f"Google Cloud Vision OCR failed: {error.get('message', 'unknown provider error')}"
-            )
-        annotation = result.get("fullTextAnnotation")
-        if not annotation or "text" not in annotation:
-            raise OcrProviderError("Google Cloud Vision found no document text")
-        return str(annotation["text"])
+        return response.full_text_annotation.text
