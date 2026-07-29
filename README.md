@@ -13,4 +13,4 @@ uvicorn backend.app.main:app --reload
 
 The backend uses independent domain modules under `backend/app/modules`. Shared configuration, environment loading, logging, dependency providers, response models, API composition, and utilities are kept separate. The module routers are placeholders and contain no product behavior.
 
-The infrastructure check is available at `GET /api/health`. It returns the common response envelope and is not a product feature.
+Placeholder contracts are exposed at `/upload_frame`, `/ocr/process`, `/gesture/select`, `/ai/explain`, `/session/start`, `/session/end`, `/session/current`, and `/health`. They do not perform processing.
