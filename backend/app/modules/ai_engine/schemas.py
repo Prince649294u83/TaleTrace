@@ -1,7 +1,5 @@
-from pydantic import BaseModel
+"""Compatibility exports for AI Engine API schemas."""
 
-class AiExplainRequest(BaseModel):
-    content_reference: str | None = None
+from backend.app.modules.ai_engine.models import AiExplainRequest, AiExplainResponse
 
-class AiExplainResponse(BaseModel):
-    status: str
+__all__ = ["AiExplainRequest", "AiExplainResponse"]
