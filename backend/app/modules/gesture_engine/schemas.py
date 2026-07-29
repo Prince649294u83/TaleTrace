@@ -1,7 +1,8 @@
-from pydantic import BaseModel
+"""Compatibility exports for Gesture Engine API schemas."""
 
-class GestureSelectRequest(BaseModel):
-    selection_reference: str | None = None
+from backend.app.modules.gesture_engine.models import (
+    GestureSelectRequest,
+    GestureSelectResponse,
+)
 
-class GestureSelectResponse(BaseModel):
-    status: str
+__all__ = ["GestureSelectRequest", "GestureSelectResponse"]
