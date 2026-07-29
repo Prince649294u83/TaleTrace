@@ -1,7 +1,11 @@
+"""Response models for the single-image testing endpoint."""
+
 from pydantic import BaseModel
 
-class UploadFrameRequest(BaseModel):
-    frame_reference: str | None = None
 
 class UploadFrameResponse(BaseModel):
-    status: str
+    status: str = "success"
+    text: str
+    latest_image: str
+    processed_image: str
+    output_file: str

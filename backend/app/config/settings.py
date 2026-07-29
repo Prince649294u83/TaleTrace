@@ -1,6 +1,7 @@
 """Environment-backed application settings."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,6 +15,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     host: str = "127.0.0.1"
     port: int = 8000
+    google_cloud_vision_api_key: str | None = None
+    latest_image_path: Path = Path("latest.jpg")
+    processed_image_path: Path = Path("output/processed.jpg")
+    ocr_output_path: Path = Path("output/output.txt")
+    max_image_bytes: int = 10 * 1024 * 1024
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -20,3 +20,5 @@ htmlcov/
 .vscode/
 .DS_Store
 Thumbs.db
+latest.jpg
+output/
