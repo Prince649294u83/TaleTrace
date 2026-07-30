@@ -4,13 +4,14 @@ from fastapi import APIRouter
 from backend.app.models.responses import ResponseEnvelope
 from backend.app.modules.ai_engine.schemas import AiExplainRequest, AiExplainResponse
 from backend.app.modules.ai_engine.models import AiInput, AiPlaceholderResponse, AiSessionSummaryRequest
-from backend.app.modules.ai_engine.engines import ExplanationEngine, NovelMode, SummaryGenerator
+from backend.app.modules.ai_engine.engines import ExplanationEngine, NovelMode, SummaryGenerator, ImageDecision
 
 router = APIRouter(prefix="/ai", tags=["ai_engine"])
 
 _explanation_engine = ExplanationEngine()
 _novel_mode = NovelMode()
 _summary_generator = SummaryGenerator()
+_image_decision = ImageDecision()
 
 
 @router.post("/explain", response_model=ResponseEnvelope[AiExplainResponse])
@@ -40,5 +41,14 @@ def session_summary_content(request: AiSessionSummaryRequest) -> ResponseEnvelop
     result = _summary_generator.summarize(request)
     return ResponseEnvelope(
         message="Session summary generated",
+        data=result,
+    )
+
+
+@router.post("/image-decision", response_model=ResponseEnvelope[AiPlaceholderResponse])
+def image_decision_content(request: AiInput) -> ResponseEnvelope[AiPlaceholderResponse]:
+    result = _image_decision.decide(request)
+    return ResponseEnvelope(
+        message="Image decision generated",
         data=result,
     )
