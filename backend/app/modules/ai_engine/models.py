@@ -25,3 +25,12 @@ class AiExplainRequest(AiInput):
 
 class AiExplainResponse(AiPlaceholderResponse):
     """Placeholder response for the existing explanation route."""
+
+class AiSessionSummaryRequest(AiInput):
+    """Input contract for session-end flashcard/quiz/summary generation."""
+    session_history: list[dict[str, str]] = Field(default_factory=list)
+
+class AiExplainRequest(AiInput):
+    """Input contract for the existing explanation route."""
+    previously_explained: list[dict[str, str]] = Field(default_factory=list)
+    
