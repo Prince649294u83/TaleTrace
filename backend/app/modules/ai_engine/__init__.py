@@ -10,17 +10,42 @@ from backend.app.modules.ai_engine.interfaces import (
     QuizGeneratorInterface,
     SummaryGeneratorInterface,
 )
-from backend.app.modules.ai_engine.models import AiInput, AiPlaceholderResponse
+from backend.app.modules.ai_engine.models import (
+    AiCapabilityResponse,
+    AiExplainRequest,
+    AiExplainResponse,
+    AiInput,
+    AiPlaceholderResponse,
+    AiSessionSummaryRequest,
+    BookMetadata,
+    DifficultyLevel,
+    ImageType,
+    LearnedWord,
+    LookupRecord,
+    ReadingContext,
+    ReadingMode,
+)
 
 __all__ = [
     "AdaptiveReadingInterface",
+    "AiCapabilityResponse",
+    "AiExplainRequest",
+    "AiExplainResponse",
     "AiInput",
     "AiPlaceholderResponse",
+    "AiSessionSummaryRequest",
+    "BookMetadata",
+    "DifficultyLevel",
     "ExplanationEngineInterface",
     "FlashcardGeneratorInterface",
     "ImageDecisionInterface",
+    "ImageType",
+    "LearnedWord",
+    "LookupRecord",
     "NovelModeInterface",
     "PromptBuilderInterface",
     "QuizGeneratorInterface",
+    "ReadingContext",
+    "ReadingMode",
     "SummaryGeneratorInterface",
 ]

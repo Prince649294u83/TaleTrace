@@ -12,13 +12,6 @@ class PlaceholderCapability:
         return AiPlaceholderResponse(capability=self.capability)
 
 
-class PromptBuilderPlaceholder(PlaceholderCapability):
-    capability = "prompt_builder"
-
-    def build(self, _request: AiInput) -> AiPlaceholderResponse:
-        return self._response()
-
-
 class ExplanationEnginePlaceholder(PlaceholderCapability):
     capability = "explanation_engine"
 

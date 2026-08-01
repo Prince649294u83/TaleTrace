@@ -1,0 +1,602 @@
+"""Playback coordination — the core of the Reading Audio Engine.
+
+Owns the loop that takes a sentence off the queue, speaks it, advances the
+pointer, and repeats. Everything else it delegates: state to the state machine,
+position to the pointer manager, pending text to the queue, and speech to a
+provider.
+
+It never touches OCR, the camera, Google Vision, or the AI Engine. It answers
+one question: given the current pointer, what should I speak and how?
+
+Two invariants drive the design:
+
+1. A sentence is never cut off mid-utterance by a pointer change. A Reading
+   Update moves to WAITING_FOR_POINTER and the jump lands after the current
+   sentence finishes. Meaning Mode is the deliberate exception — it stops the
+   sink immediately, because a reader who does not understand a word should not
+   have to wait.
+2. Merge Memory updates never restart the sentence in flight. It has already
+   been dequeued, so a refresh only rewrites what has not been spoken.
+"""
+
+import asyncio
+import logging
+import time
+from collections.abc import Callable
+
+from backend.app.modules.audio_engine.audio_profiles import get_profile
+from backend.app.modules.audio_engine.models import (
+    AudioProfile,
+    PauseReason,
+    PlaybackState,
+    PlaybackStatistics,
+    PlaybackStatus,
+    ReadingPointer,
+    SentenceChunk,
+    SpeechRequest,
+    Voice,
+)
+from backend.app.modules.audio_engine.pointer_manager import PointerManager
+from backend.app.modules.audio_engine.sentence_queue import SentenceQueue, segment_sentences
+from backend.app.modules.audio_engine.speech_provider import (
+    AudioSink,
+    NullAudioSink,
+    get_provider,
+)
+from backend.app.modules.audio_engine.state_machine import PlaybackStateMachine
+
+logger = logging.getLogger(__name__)
+
+
+class _Counters:
+    """Mutable playback tallies.
+
+    Kept beside the engine rather than in a statistics module so there is one
+    clock and one set of counts. A separate timer would drift from the state
+    machine's, and the two would eventually disagree.
+    """
+
+    def __init__(self) -> None:
+        self.sentences = 0
+        self.words = 0
+        self.characters = 0
+        self.pauses = 0
+        self.meaning_mode = 0
+        self.reading_updates = 0
+        self.queue_refreshes = 0
+        self.stale_rejected = 0
+        self.pages: set[int] = set()
+        self.started_at: float | None = None
+        # Reading time from pages already turned. The state machine's clock is
+        # zeroed by the IDLE/READY transitions a page turn goes through, so
+        # without this the session's reading time would restart at every page.
+        self.carried_reading_ms = 0
+
+    def reset(self) -> None:
+        self.__init__()
+
+
+class PlaybackEngine:
+    """Implements PlaybackEngineInterface."""
+
+    def __init__(
+        self,
+        *,
+        provider=None,
+        sink: AudioSink | None = None,
+        state_machine: PlaybackStateMachine | None = None,
+        auto_advance: bool = True,
+        session_id: str = "default",
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        # `auto_advance=False` lets tests drive the loop one sentence at a time.
+        self._provider = provider if provider is not None else get_provider()
+        self._sink = sink if sink is not None else NullAudioSink()
+        self._machine = state_machine or PlaybackStateMachine(clock=clock)
+        self._pointer = PointerManager()
+        self._queue = SentenceQueue()
+        self._auto_advance = auto_advance
+        self._session_id = session_id
+        self._clock = clock
+
+        self._profile: AudioProfile = get_profile(None)
+        self._voice_id: str | None = None
+        self._current: SentenceChunk | None = None
+        self._pending_seek: ReadingPointer | None = None
+        self._error: str | None = None
+
+        self._stats = _Counters()
+        # Preserved across stop(), so a session summary survives the reset.
+        self._final_statistics: PlaybackStatistics | None = None
+        # Highest Merge Memory version applied. Refreshes at or below this are
+        # rejected, so an OCR frame delayed in flight cannot overwrite a newer one.
+        self._source_version = 0
+
+        # Serializes state changes so a pause arriving mid-sentence cannot
+        # interleave with the advance that follows it.
+        self._lock = asyncio.Lock()
+        self._task: asyncio.Task | None = None
+
+    @property
+    def session_id(self) -> str:
+        return self._session_id
+
+    def _log(self, event: str, **fields) -> None:
+        """Emit one structured line through the app's logging config.
+
+        Sessions interleave in a shared log, so every line carries its id.
+        """
+
+        detail = " ".join(f"{k}={v!r}" for k, v in fields.items())
+        logger.info("[audio:%s] %s%s", self._session_id, event, f" {detail}" if detail else "")
+
+    # ---------- lifecycle ----------
+
+    async def start(
+        self,
+        *,
+        pointer: ReadingPointer,
+        text: str,
+        profile: AudioProfile | None = None,
+        voice_id: str | None = None,
+    ) -> PlaybackState:
+        """Begin playback from `pointer`.
+
+        `text` is a clean paragraph from Merge Memory, not raw OCR.
+        """
+
+        # Retire any previous loop before rebuilding state, so an old task
+        # cannot keep speaking from the queue we are about to replace.
+        await self._cancel_loop()
+
+        async with self._lock:
+            self._profile = profile or self._profile
+            self._voice_id = voice_id or self._voice_id
+            self._error = None
+            self._pending_seek = None
+            self._current = None
+
+            self._pointer.update(pointer)
+
+            # Sentences are numbered from the start of the paragraph, then the
+            # ones already behind the pointer are dropped. Numbering from the
+            # pointer instead would label the paragraph's first sentence with
+            # the pointer's index and disagree with seek().
+            chunks = segment_sentences(
+                text,
+                start_pointer=pointer.at_paragraph_start(),
+                rate=self._profile.rate,
+            )
+            self._queue.replace(chunks)
+            self._queue.drop_before(pointer)
+
+            # Statistics belong to the reading *session*, not to one start()
+            # call. A page turn calls start() again to rebuild the queue for new
+            # text — that is mid-session, so the tally must carry over. Only a
+            # start() from IDLE (the state stop() leaves behind) begins a new
+            # session and resets. Getting this wrong silently zeroes a reader's
+            # analytics at every page turn.
+            if self._machine.state is PlaybackState.IDLE:
+                self._stats.reset()
+                self._stats.started_at = self._clock()
+                self._final_statistics = None
+            else:
+                # Mid-session restart (page turn): bank the reading time before
+                # the IDLE/READY transitions below zero the machine's clock.
+                self._stats.carried_reading_ms += self._machine.elapsed_reading_ms
+
+            self._stats.pages.add(pointer.page_index)
+            # Merge versions are per-page, so a new page starts from zero again.
+            self._source_version = 0
+
+            if self._machine.state is not PlaybackState.IDLE:
+                self._machine.transition_to(PlaybackState.IDLE)
+            self._machine.transition_to(PlaybackState.READY)
+
+            if not self._queue:
+                self._machine.transition_to(PlaybackState.FINISHED)
+                self._log("playback_finished", reason="no_sentences")
+                return self._machine.state
+
+            self._machine.transition_to(PlaybackState.PLAYING)
+            self._log(
+                "playback_started",
+                pointer=pointer.sentence_order_key(),
+                sentences=self._queue.size(),
+                profile=self._profile.name,
+                provider=self.provider_name,
+            )
+
+        self._spawn_loop()
+        return self._machine.state
+
+    async def pause(self, *, reason: PauseReason = PauseReason.USER) -> PlaybackState:
+        """Suspend playback, preserving the pointer.
+
+        Meaning Mode cuts the current sentence off rather than waiting for it.
+        """
+
+        async with self._lock:
+            if self._machine.state not in (
+                PlaybackState.PLAYING,
+                PlaybackState.WAITING_FOR_POINTER,
+            ):
+                return self._machine.state
+
+            # The in-flight sentence was cut off, so put it back. Without this,
+            # resume() would dequeue the *next* sentence and the reader would
+            # lose whatever they only half-heard.
+            if self._current is not None:
+                self._queue.push_front(self._current)
+
+            self._machine.transition_to(PlaybackState.PAUSED, pause_reason=reason)
+            self._stats.pauses += 1
+            if reason is PauseReason.MEANING_MODE:
+                self._stats.meaning_mode += 1
+
+            self._log(
+                "paused",
+                reason=reason.value,
+                requeued=self._current.text[:40] if self._current else None,
+            )
+
+        await self._sink.stop()
+        return self._machine.state
+
+    async def resume(self) -> PlaybackState:
+        """Continue from the preserved pointer."""
+
+        # Retire the paused loop before starting a new one. It may still be
+        # unwinding from the sentence it was cut off in, and _spawn_loop()
+        # declines to start a fresh loop while a task is alive — so without this
+        # a resume can silently do nothing, or let the stale loop advance the
+        # pointer past the sentence pause() just requeued. Cancelling mid-speak
+        # loses nothing: pause() already put that sentence back at the head.
+        await self._cancel_loop()
+
+        async with self._lock:
+            if self._machine.state is not PlaybackState.PAUSED:
+                return self._machine.state
+            if not self._queue and self._current is None:
+                self._machine.transition_to(PlaybackState.FINISHED)
+                self._log("playback_finished", reason="nothing_left_to_speak")
+                return self._machine.state
+            self._machine.transition_to(PlaybackState.PLAYING)
+            head = self._queue.peek()
+            self._log("resumed", next_sentence=head.text[:40] if head else None)
+
+        self._spawn_loop()
+        return self._machine.state
+
+    async def stop(self) -> PlaybackState:
+        """End playback and clear all state."""
+
+        async with self._lock:
+            # Snapshot before IDLE resets the machine's clock, so the summary the
+            # AI Engine receives reflects the session that just ended.
+            final = self._snapshot_statistics()
+
+            self._machine.transition_to(PlaybackState.IDLE)
+            self._queue.clear()
+            self._pointer.reset()
+            self._current = None
+            self._pending_seek = None
+            self._final_statistics = final
+
+            self._log(
+                "session_ended",
+                sentences=final.sentences_spoken,
+                words=final.words_spoken,
+                pages=final.pages_read,
+                reading_ms=final.reading_time_ms,
+                wpm=round(final.average_wpm, 1),
+            )
+
+        await self._sink.stop()
+        await self._cancel_loop()
+        return self._machine.state
+
+    # ---------- pointer changes ----------
+
+    async def seek(
+        self, *, pointer: ReadingPointer, text: str | None = None
+    ) -> PlaybackState:
+        """Jump to `pointer` after the current sentence finishes.
+
+        While idle or paused the jump applies at once, since nothing is in
+        flight to protect.
+        """
+
+        async with self._lock:
+            if text is not None:
+                # Fresh text: rebuild the queue from the paragraph, then drop
+                # everything the reader has already moved past.
+                chunks = segment_sentences(
+                    text,
+                    start_pointer=pointer.at_paragraph_start(),
+                    rate=self._profile.rate,
+                )
+                self._queue.replace(chunks)
+                skipped = self._queue.drop_before(pointer)
+            else:
+                # No new text: keep what is queued, minus what is now behind us.
+                # Otherwise the next dequeue would pull a stale earlier sentence
+                # and quietly undo the jump.
+                skipped = self._queue.drop_before(pointer)
+
+            self._stats.reading_updates += 1
+            self._stats.pages.add(pointer.page_index)
+
+            deferred = self._machine.state is PlaybackState.PLAYING
+            self._log(
+                "pointer_changed",
+                to=pointer.sentence_order_key(),
+                skipped=skipped,
+                had_text=text is not None,
+                deferred=deferred,
+                queue_version=self._queue.version,
+            )
+
+            if deferred:
+                # Defer the jump; the loop applies it once the sentence finishes.
+                self._pending_seek = pointer
+                self._machine.transition_to(PlaybackState.WAITING_FOR_POINTER)
+                return self._machine.state
+
+            self._pointer.update(pointer)
+            return self._machine.state
+
+    async def refresh_queue(
+        self,
+        *,
+        text: str | None = None,
+        sentences: list[SentenceChunk] | None = None,
+        source_version: int | None = None,
+    ) -> bool:
+        """Reload pending sentences after a Merge Memory update.
+
+        `text` is the whole current paragraph as Merge Memory now has it. The
+        sentence in flight is already dequeued, so it is never disturbed — only
+        what comes after it is rewritten.
+
+        `source_version` is Merge Memory's own version for this text. Supply it
+        and out-of-order refreshes are rejected: OCR frames travel over HTTP and
+        can arrive reordered, and applying an older frame after a newer one would
+        regress the text the reader is about to hear. Omit it and every refresh
+        is applied, which is fine for a single in-process caller.
+
+        Returns True when the refresh was applied.
+        """
+
+        async with self._lock:
+            if sentences is None and text is None:
+                return False
+
+            if source_version is not None and source_version <= self._source_version:
+                self._stats.stale_rejected += 1
+                self._log(
+                    "queue_refresh_rejected",
+                    reason="stale_source_version",
+                    received=source_version,
+                    current=self._source_version,
+                )
+                return False
+
+            anchor = (
+                self._current.pointer if self._current else self._pointer.current_pointer()
+            )
+
+            if sentences is None:
+                sentences = segment_sentences(
+                    text,
+                    start_pointer=anchor.at_paragraph_start(),
+                    rate=self._profile.rate,
+                )
+
+            before = self._queue.version
+            self._queue.replace_after(anchor, sentences)
+            if source_version is not None:
+                self._source_version = source_version
+
+            self._stats.queue_refreshes += 1
+            self._log(
+                "queue_refreshed",
+                anchor=anchor.sentence_order_key(),
+                pending=self._queue.size(),
+                queue_version=f"{before} -> {self._queue.version}",
+                source_version=source_version,
+            )
+            return True
+
+    def set_profile(self, profile: AudioProfile) -> None:
+        """Swap the delivery profile. Takes effect on the next sentence."""
+
+        self._profile = profile
+
+    def set_voice(self, voice_id: str | None) -> None:
+        self._voice_id = voice_id
+
+    @property
+    def provider_name(self) -> str:
+        return getattr(self._provider, "provider_name", "unknown")
+
+    async def list_voices(self) -> list[Voice]:
+        """Voices offered by the active provider."""
+
+        return await self._provider.get_available_voices()
+
+    async def wait_for_idle(self, *, timeout: float | None = 5.0) -> None:
+        """Await the playback loop settling.
+
+        Playback runs as a background task, so callers and tests need a way to
+        wait for it rather than polling.
+        """
+
+        task = self._task
+        if task is None or task.done():
+            return
+        await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+
+    # ---------- playback loop ----------
+
+    def _spawn_loop(self) -> None:
+        if self._task is None or self._task.done():
+            self._task = asyncio.create_task(self._run())
+
+    async def _cancel_loop(self) -> None:
+        task = self._task
+        self._task = None
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
+
+    async def _run(self) -> None:
+        """Speak queued sentences until interrupted or exhausted."""
+
+        try:
+            while True:
+                async with self._lock:
+                    if self._machine.state not in (
+                        PlaybackState.PLAYING,
+                        PlaybackState.WAITING_FOR_POINTER,
+                    ):
+                        return
+
+                    chunk = self._queue.dequeue()
+                    if chunk is None:
+                        self._current = None
+                        self._machine.transition_to(PlaybackState.FINISHED)
+                        return
+
+                    self._current = chunk
+                    self._pointer.update(chunk.pointer)
+                    profile = self._profile
+                    voice_id = self._voice_id
+
+                await self._speak(chunk, profile, voice_id)
+
+                async with self._lock:
+                    if self._machine.state is PlaybackState.PAUSED:
+                        # Paused mid-sentence; resume() picks up from here. Not
+                        # counted: pause() requeued it and it will be spoken again.
+                        return
+
+                    # Finished uninterrupted, so it counts exactly once.
+                    self._count_spoken(chunk)
+
+                    if (
+                        self._machine.state is PlaybackState.WAITING_FOR_POINTER
+                        and self._pending_seek is not None
+                    ):
+                        self._pointer.update(self._pending_seek)
+                        self._pending_seek = None
+                        self._machine.transition_to(PlaybackState.PLAYING)
+                    elif self._machine.state is PlaybackState.PLAYING:
+                        self._pointer.advance()
+
+                    self._current = None
+
+                    if self._machine.state is not PlaybackState.PLAYING:
+                        return
+                    if not self._auto_advance:
+                        return
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001 — keep a crash out of the caller's task
+            logger.exception("Playback loop failed")
+            self._error = str(e)
+
+    async def _speak(
+        self, chunk: SentenceChunk, profile: AudioProfile, voice_id: str | None
+    ) -> None:
+        """Synthesize and play one sentence, then honour the profile's pause."""
+
+        response = await self._provider.synthesize(
+            SpeechRequest(text=chunk.text, profile=profile, voice_id=voice_id)
+        )
+
+        if not response.ok:
+            self._error = response.error
+            logger.warning("Synthesis failed for %r: %s", chunk.text[:40], response.error)
+            return
+
+        # Providers that speak directly to the device return no bytes.
+        if response.audio:
+            await self._sink.play(response.audio, content_type=response.content_type)
+
+        if profile.pause_after_sentence_ms:
+            await asyncio.sleep(profile.pause_after_sentence_ms / 1000)
+
+    # ---------- statistics ----------
+
+    def _count_spoken(self, chunk: SentenceChunk) -> None:
+        """Tally one fully spoken sentence, and note a page change."""
+
+        self._stats.sentences += 1
+        self._stats.words += len(chunk.text.split())
+        self._stats.characters += len(chunk.text)
+
+        page = chunk.pointer.page_index
+        if page not in self._stats.pages:
+            self._stats.pages.add(page)
+            self._log("page_changed", page=page)
+
+    def _snapshot_statistics(self) -> PlaybackStatistics:
+        """Build the analytics snapshot from the counters and both clocks."""
+
+        reading_ms = self._stats.carried_reading_ms + self._machine.elapsed_reading_ms
+        playback_ms = (
+            int((self._clock() - self._stats.started_at) * 1000)
+            if self._stats.started_at is not None
+            else 0
+        )
+
+        minutes = reading_ms / 60_000
+        wpm = self._stats.words / minutes if minutes > 0 else 0.0
+
+        return PlaybackStatistics(
+            sentences_spoken=self._stats.sentences,
+            words_spoken=self._stats.words,
+            characters_spoken=self._stats.characters,
+            pages_read=len(self._stats.pages),
+            pause_count=self._stats.pauses,
+            meaning_mode_count=self._stats.meaning_mode,
+            reading_updates=self._stats.reading_updates,
+            queue_refreshes=self._stats.queue_refreshes,
+            stale_updates_rejected=self._stats.stale_rejected,
+            playback_time_ms=playback_ms,
+            reading_time_ms=reading_ms,
+            average_wpm=round(wpm, 2),
+        )
+
+    @property
+    def final_statistics(self) -> PlaybackStatistics | None:
+        """Statistics captured at the last stop(), for session summaries.
+
+        `stop()` resets the machine's clock, so the AI Engine needs the snapshot
+        taken just before that rather than the live counters.
+        """
+
+        return self._final_statistics
+
+    # ---------- status ----------
+
+    def get_status(self) -> PlaybackStatus:
+        return PlaybackStatus(
+            state=self._machine.state,
+            session_id=self._session_id,
+            pointer=self._pointer.current_pointer() if self._pointer.is_set else None,
+            current_sentence=self._current.text if self._current else None,
+            profile_name=self._profile.name,
+            provider=getattr(self._provider, "provider_name", "unknown"),
+            voice_id=self._voice_id,
+            queued_sentences=self._queue.size(),
+            queue_version=self._queue.version,
+            pause_reason=self._machine.pause_reason,
+            elapsed_reading_ms=self._machine.elapsed_reading_ms,
+            statistics=self._snapshot_statistics(),
+            error=self._error,
+        )
