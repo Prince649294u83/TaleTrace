@@ -1,0 +1,14 @@
+# Type-checker configuration for the TaleTrace project.
+#
+# main_controller.py adds these directories to sys.path at runtime so it can
+# import the two subpackages as top-level modules:
+#
+#     sys.path.append(os.path.join(PROJECT_ROOT, "OCR_dynamicMem"))
+#     sys.path.append(os.path.join(PROJECT_ROOT, "Gesture"))
+#
+# Static analysis cannot follow those calls, so the same directories are
+# declared here. This makes `taletrace_processor`, `gesture_engine`, and `ocr`
+# resolvable to the checker exactly as they are at runtime.
+
+[environment]
+extra-paths = ["Gesture", "OCR_dynamicMem"]

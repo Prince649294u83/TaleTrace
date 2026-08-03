@@ -11,6 +11,7 @@ from backend.app.modules.image_receiver.router import router as image_receiver_r
 from backend.app.modules.ocr.router import router as ocr_router
 from backend.app.modules.preprocessing.router import router as preprocessing_router
 from backend.app.modules.reading_engine.router import router as reading_engine_router
+from backend.app.modules.reading_speed.router import router as reading_speed_router
 from backend.app.modules.session.router import router as session_router
 
 api_router = APIRouter()
@@ -24,6 +25,7 @@ for module_router in (
     gesture_engine_router,
     ai_engine_router,
     audio_engine_router,
+    reading_speed_router,
     database_router,
     session_router,
 ):

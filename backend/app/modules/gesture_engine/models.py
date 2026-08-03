@@ -1,16 +1,27 @@
-"""Provider-neutral Gesture Engine contracts."""
+"""Provider-neutral Gesture Engine contracts.
+
+`FingerPoint` is re-exported from `selection_models` rather than defined here.
+This module used to declare its own — a normalized (x, y) with no confidence and
+no direction — while the detector produced a different one with both. Two types
+of the same name in one module is exactly the duplication the integration is
+meant to remove, and the placeholder version could not have carried a real
+detection anyway: a fingertip without a confidence cannot be told apart from a
+guess.
+"""
 
 from pydantic import BaseModel, Field
 
 from backend.app.models import Frame, Gesture, OCRPage, OCRWord
+from backend.app.modules.gesture_engine.selection_models import FingerPoint
 
-
-class FingerPoint(BaseModel):
-    """Normalized finger coordinate independent of MediaPipe types."""
-
-    x: float
-    y: float
-    normalized: bool = True
+__all__ = [
+    "FingerPoint",
+    "GestureDetectionRequest",
+    "GesturePlaceholderResponse",
+    "GestureSelectRequest",
+    "GestureSelectResponse",
+    "OcrMappingRequest",
+]
 
 
 class GestureDetectionRequest(BaseModel):

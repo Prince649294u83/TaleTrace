@@ -20,3 +20,8 @@ htmlcov/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# The standalone Gesture tree is its own git repository with its own remote.
+# Staging it here records a gitlink, which clones as an empty directory for
+# everyone else. Its logic already lives in backend/app/modules/{ocr,gesture_engine}.
+backend/app/OCRandGESTURE/Gesture/

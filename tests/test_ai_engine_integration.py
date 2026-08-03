@@ -348,3 +348,88 @@ class TestRoutes:
         data = response.json()["data"]["data"]
         assert data["scene_mood"] == "suspense"
         assert data["intensity"] == 0.7
+
+
+class TestRetryAndFallback:
+    """`_safe_json_completion` is the only thing standing between a flaky model
+    and a broken reading session, and it was the one part of the engine with no
+    coverage. Every case here is a real upstream behaviour: a transient 5xx, a
+    model that opens with prose before its JSON, and an outage that outlasts the
+    retries."""
+
+    def test_a_transient_failure_is_retried_and_succeeds(self):
+        """One bad response should cost a retry, not the lookup."""
+
+        client = mock_groq({"oled_text": "ok", "full_explanation": "fine"})
+        client.chat.completions.create.side_effect = [
+            ConnectionError("upstream 503"),
+            client.chat.completions.create.return_value,
+        ]
+
+        with patch(
+            "backend.app.modules.ai_engine.engines._get_client", return_value=client
+        ):
+            result = ExplanationEngine().explain(
+                AiExplainRequest(text="The lamp was lit.", metadata={"word": "lamp"})
+            )
+
+        assert result.status == "ok"
+        assert result.data["full_explanation"] == "fine"
+        assert client.chat.completions.create.call_count == 2
+
+    def test_malformed_json_is_retried(self):
+        """JSON mode is a request, not a guarantee; the model sometimes prefaces it."""
+
+        good = mock_groq({"oled_text": "ok", "full_explanation": "fine"})
+        broken = MagicMock()
+        broken.choices = [MagicMock()]
+        broken.choices[0].message.content = "Sure! Here you go: {not json"
+
+        client = good
+        client.chat.completions.create.side_effect = [
+            broken,
+            good.chat.completions.create.return_value,
+        ]
+
+        with patch(
+            "backend.app.modules.ai_engine.engines._get_client", return_value=client
+        ):
+            result = ExplanationEngine().explain(
+                AiExplainRequest(text="The lamp was lit.", metadata={"word": "lamp"})
+            )
+
+        assert result.status == "ok"
+        assert client.chat.completions.create.call_count == 2
+
+    def test_retries_are_bounded_and_then_reported(self):
+        """Three attempts, then an error payload — never an exception at the caller."""
+
+        client = mock_groq({})
+        client.chat.completions.create.side_effect = ConnectionError("upstream down")
+
+        with patch(
+            "backend.app.modules.ai_engine.engines._get_client", return_value=client
+        ):
+            result = ExplanationEngine().explain(
+                AiExplainRequest(text="The lamp was lit.", metadata={"word": "lamp"})
+            )
+
+        assert result.status == "error"
+        assert "Failed after 3 attempts" in result.data["error"]
+        assert client.chat.completions.create.call_count == 3
+
+    def test_a_missing_api_key_degrades_rather_than_crashes(self):
+        """No key is a configuration state a session must survive, not a fault."""
+
+        with patch(
+            "backend.app.modules.ai_engine.engines._get_client",
+            side_effect=RuntimeError("The api_key client option must be set"),
+        ):
+            result = SummaryGenerator().summarize(
+                AiSessionSummaryRequest(
+                    session_history=[LookupRecord(word="lamp", context="The lamp was lit.")]
+                )
+            )
+
+        assert result.status == "error"
+        assert "error" in result.data

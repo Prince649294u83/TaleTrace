@@ -38,12 +38,15 @@ G = _glyphs()
 _PUNCTUATION = str.maketrans({"—": "-", "–": "-", "“": '"', "”": '"', "‘": "'", "’": "'", "…": "..."})
 
 
-def _safe(text: str) -> str:
+def safe(text: str) -> str:
     """Make text safe for the current console.
 
     Windows terminals still default to cp1252, and an em dash in a label is not
     worth a UnicodeEncodeError — or a stray replacement character — halfway
     through a demo.
+
+    Public because text from outside the demo package needs it too: analytics
+    evidence strings contain em dashes, and they are printed through here.
     """
 
     encoding = (getattr(sys.stdout, "encoding", None) or "ascii").lower()
@@ -54,6 +57,10 @@ def _safe(text: str) -> str:
     except (UnicodeEncodeError, LookupError):
         return text.encode("ascii", "replace").decode("ascii")
     return text
+
+
+# The original name, kept because several demo modules import it.
+_safe = safe
 
 
 def rule(char: str = "=") -> None:

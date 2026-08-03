@@ -1,0 +1,5 @@
+{
+  "//": "main_controller.py appends these to sys.path at runtime; static analysis cannot follow that, so they are declared here.",
+  "extraPaths": ["Gesture", "OCR_dynamicMem"],
+  "exclude": ["venv", ".venv", "**/__pycache__"]
+}

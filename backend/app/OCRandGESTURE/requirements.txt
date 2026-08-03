@@ -1,0 +1,8 @@
+# TaleTrace — full system dependencies (controller + OCR memory + gesture engine)
+numpy>=1.24.0
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+requests>=2.31.0
+groq>=0.11.0
+python-dotenv>=1.0.0
+pytest>=7.0.0
