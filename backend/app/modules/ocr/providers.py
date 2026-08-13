@@ -1,23 +1,31 @@
-"""The OCR engines, behind one port.
+"""Google Vision: the one OCR engine in production.
 
 Migrated from the standalone `OCRandGESTURE/Gesture/ocr/` tree. The recognition
-logic is preserved as written — Google Vision's hierarchical walk and Paddle's
-per-line word splitting are the parts that were actually tuned against real
-pages, and rewriting them would throw away the only thing that had been tested
-on real books.
+logic is preserved as written — the hierarchical walk over Vision's response is
+the part that was actually tuned against real pages, and rewriting it would throw
+away the only thing that had been tested on real books.
 
-What changed is everything around that logic:
+There is deliberately no provider registry and no way to select an engine at
+runtime. Production reads pages with Google Vision, full stop:
 
-  - the three providers no longer each carry a private copy of the
-    centre-point arithmetic; they build words through `RecognizedWord.from_bbox`
-  - image coercion (array / bytes / path / URL) was duplicated in the Google
-    provider only; it now lives in `coerce_to_jpeg_bytes` where Paddle can use it
-  - a missing optional dependency is reported when the provider is selected,
-    not at import, so a machine without PaddleOCR can still run the rest of
-    the system
+    ESP32 -> OpenCV -> Google Vision -> parser -> Merge Engine -> Merge Memory
 
-`get_provider` is the only function the runtime calls. Everything above it is an
-implementation detail of "read this image".
+PaddleOCR is gone. Choosing between OCR engines at runtime meant every downstream
+consumer's behaviour depended on which engine happened to be configured, and only
+one of them was ever tuned against real books.
+
+Tests and demos do not use this file's network path; they use
+`ocr/replay.py`, which feeds recorded Vision responses through
+`GoogleVisionProvider.parse_response` — the same parser used here. It is not a
+provider and the runtime cannot select it.
+
+What changed from the standalone
+--------------------------------
+  - the centre-point arithmetic is no longer a private copy per provider; words
+    are built through `RecognizedWord.from_bbox`
+  - image coercion (array / bytes / path / URL) lives in `coerce_to_jpeg_bytes`
+  - a missing credential is reported when a frame is submitted, not at import,
+    so the app boots without a key
 """
 
 from __future__ import annotations
@@ -167,6 +175,8 @@ class GoogleVisionProvider:
                             if not text:
                                 continue
 
+                            break_type = _break_after(symbols)
+
                             words.append(
                                 RecognizedWord.from_bbox(
                                     text,
@@ -175,18 +185,13 @@ class GoogleVisionProvider:
                                     word_index=word_index,
                                     line_index=line_index,
                                     paragraph_index=paragraph_index,
+                                    space_after=break_type in _SPACING_BREAKS,
                                 )
                             )
                             word_index += 1
 
                             # Vision marks line ends on the symbol, not the word.
-                            if any(
-                                symbol.get("property", {})
-                                .get("detectedBreak", {})
-                                .get("type")
-                                in ("LINE_BREAK", "EOL_SURE_SPACE")
-                                for symbol in symbols
-                            ):
+                            if break_type in ("LINE_BREAK", "EOL_SURE_SPACE"):
                                 line_index += 1
 
                         paragraph_index += 1
@@ -209,186 +214,18 @@ class GoogleVisionProvider:
         return words
 
 
-class PaddleOcrProvider:
-    """Local OCR via RapidOCR (ONNX) or PaddleOCR, whichever imports.
+def get_ocr_engine(**kwargs: Any) -> GoogleVisionProvider:
+    """The production OCR engine. Always Google Vision.
 
-    RapidOCR is preferred because it is the ONNX port and avoids the native
-    Paddle DLL problems on Windows. Both report per-line boxes, so a line is
-    split into words by character-count proportion — approximate geometry, but
-    good enough for word selection, which scores on relative position.
+    Takes no name and reads no `OCR_PROVIDER` variable: there is nothing to
+    choose between, and that is the point. A misspelt environment variable can no
+    longer silently change which engine reads the page.
+
+    Returns the engine without probing it, so constructing the runtime never
+    makes a network call. The credential is checked when a frame is submitted.
     """
 
-    provider_name = "paddle"
-
-    def __init__(self, lang: str = "en") -> None:
-        self._engine_type: str | None = None
-        self._ocr: Any = None
-        self._lang = lang
-
-    def accepts(self, source: Any) -> bool:
-        return np is not None and isinstance(source, np.ndarray)
-
-    def _engine(self) -> Any:
-        """Load the engine on first use.
-
-        Deferred because both backends load model weights, which costs seconds
-        and memory that a session using Google Vision should never pay.
-        """
-
-        if self._ocr is not None:
-            return self._ocr
-
-        try:
-            from rapidocr_onnxruntime import RapidOCR
-
-            self._ocr = RapidOCR()
-            self._engine_type = "rapidocr"
-            return self._ocr
-        except ImportError:
-            pass
-
-        try:
-            os.environ.setdefault("FLAGS_enable_pir_api", "0")
-            os.environ.setdefault("FLAGS_use_mkldnn", "0")
-            from paddleocr import PaddleOCR
-
-            try:
-                self._ocr = PaddleOCR(use_angle_cls=True, lang=self._lang)
-            except TypeError:
-                # Older/newer releases disagree about this kwarg.
-                self._ocr = PaddleOCR(lang=self._lang)
-            self._engine_type = "paddleocr"
-            return self._ocr
-        except Exception as error:
-            raise OcrProviderUnavailable(
-                f"No local OCR engine available ({error}). "
-                "Install rapidocr-onnxruntime or paddleocr."
-            ) from error
-
-    def extract(self, source: Any) -> list[RecognizedWord]:
-        engine = self._engine()
-
-        if self._engine_type == "rapidocr":
-            result, _ = engine(source)
-            raw_lines = result or []
-        else:
-            results = engine.ocr(source)
-            if not results or not results[0]:
-                return []
-            raw_lines = [[item[0], item[1][0], item[1][1]] for item in results[0]]
-
-        words: list[RecognizedWord] = []
-        for line_index, (box_points, text, confidence) in enumerate(
-            (line[0], line[1], line[2]) for line in raw_lines
-        ):
-            text = (text or "").strip()
-            if not text:
-                continue
-
-            xs = [point[0] for point in box_points]
-            ys = [point[1] for point in box_points]
-            x_min, x_max = int(min(xs)), int(max(xs))
-            y_min, y_max = int(min(ys)), int(max(ys))
-
-            tokens = text.split()
-            if len(tokens) == 1:
-                words.append(
-                    RecognizedWord.from_bbox(
-                        text,
-                        (x_min, y_min, x_max, y_max),
-                        confidence=float(confidence),
-                        word_index=len(words),
-                        line_index=line_index,
-                    )
-                )
-                continue
-
-            # Split the line box across its words by character share. Crude, but
-            # word selection compares candidates against each other, so a
-            # consistent bias costs nothing.
-            total_chars = max(1, sum(len(token) for token in tokens))
-            box_width = x_max - x_min
-            cursor = x_min
-            for token in tokens:
-                token_width = int(box_width * len(token) / total_chars)
-                words.append(
-                    RecognizedWord.from_bbox(
-                        token,
-                        (cursor, y_min, cursor + token_width, y_max),
-                        confidence=float(confidence),
-                        word_index=len(words),
-                        line_index=line_index,
-                    )
-                )
-                cursor += token_width
-
-        return words
-
-
-class JsonOcrProvider:
-    """Replays OCR output from a JSON file.
-
-    Not a test double: it is how a recorded page is fed through the real
-    pipeline deterministically, which is what makes the end-to-end scenarios
-    runnable without a camera or an API key.
-    """
-
-    provider_name = "json"
-
-    def accepts(self, source: Any) -> bool:
-        return isinstance(source, (str, list))
-
-    def extract(self, source: Any) -> list[RecognizedWord]:
-        import json
-
-        if isinstance(source, list):
-            data = source
-        else:
-            if not os.path.exists(source):
-                raise OcrProviderError(f"OCR JSON file not found: {source}")
-            with open(source, encoding="utf-8") as handle:
-                data = json.load(handle)
-
-        words: list[RecognizedWord] = []
-        for item in data:
-            text = item.get("text", "")
-            bbox = item.get("bbox", [])
-            if not text or len(bbox) != 4:
-                continue
-            words.append(
-                RecognizedWord.from_bbox(
-                    text,
-                    tuple(bbox),  # type: ignore[arg-type]
-                    confidence=item.get("confidence", 1.0),
-                    word_index=item.get("word_index", -1),
-                    line_index=item.get("line_index", -1),
-                    paragraph_index=item.get("paragraph_index", -1),
-                )
-            )
-        return words
-
-
-_PROVIDERS: dict[str, type] = {
-    GoogleVisionProvider.provider_name: GoogleVisionProvider,
-    PaddleOcrProvider.provider_name: PaddleOcrProvider,
-    JsonOcrProvider.provider_name: JsonOcrProvider,
-}
-
-
-def get_provider(name: str | None = None, **kwargs: Any):
-    """Resolve a provider by name, defaulting to `OCR_PROVIDER` then Google Vision.
-
-    Returns the provider without probing it. Credentials are checked when a
-    frame is actually submitted, so constructing the runtime never requires a
-    network call.
-    """
-
-    resolved = (name or os.environ.get("OCR_PROVIDER") or GoogleVisionProvider.provider_name).lower()
-    if resolved not in _PROVIDERS:
-        raise OcrProviderUnavailable(
-            f"Unknown OCR provider '{resolved}'. Available: {', '.join(sorted(_PROVIDERS))}"
-        )
-    return _PROVIDERS[resolved](**kwargs)
+    return GoogleVisionProvider(**kwargs)
 
 
 def _vertices_to_bbox(bounding: dict[str, Any]) -> tuple[int, int, int, int]:
@@ -400,6 +237,31 @@ def _vertices_to_bbox(bounding: dict[str, Any]) -> tuple[int, int, int, int]:
     xs = [vertex.get("x", 0) for vertex in vertices]
     ys = [vertex.get("y", 0) for vertex in vertices]
     return (int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys)))
+
+
+# The break types that mean a space follows the word. Vision distinguishes a
+# space it is sure about from one it inferred, and a line end from a paragraph
+# end, but for spacing purposes all four are the same answer. The ones
+# deliberately absent are as important: `HYPHEN` ends a word split across a line
+# and must close up, and no `detectedBreak` at all is what Vision reports between
+# a quote and the word it hugs — which is exactly the case character classes
+# cannot decide, because `"` opens and closes with the same character.
+_SPACING_BREAKS = frozenset({"SPACE", "SURE_SPACE", "EOL_SURE_SPACE", "LINE_BREAK"})
+
+
+def _break_after(symbols: list[dict[str, Any]]) -> str:
+    """The break Vision detected after a word, or `""` if it detected none.
+
+    Recorded on the last symbol of the word rather than on the word itself, so
+    this reaches past the word to its final character. An absent property is
+    returned as the empty string rather than None so callers can compare against
+    a set of names without a null check.
+    """
+
+    if not symbols:
+        return ""
+    detected = symbols[-1].get("property", {}).get("detectedBreak", {})
+    return str(detected.get("type", "") or "")
 
 
 def _word_confidence(word: dict[str, Any], symbols: list[dict[str, Any]]) -> float:

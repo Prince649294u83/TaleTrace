@@ -82,8 +82,11 @@ stronger guarantees once the schemas are final.
 
 ## Configuration
 
-`GROQ_API_KEY` is required at call time; `GROQ_MODEL` overrides the default
-model. The client is created lazily, so the app still boots without a key.
+`GROQ_API_KEY_1` is required at call time — the AI Engine's own key, not the
+Merge Engine's `GROQ_API_KEY_2` (see `shared/groq_keys.py` for why they are
+separate). `GROQ_MODEL` overrides the default model. The client is created
+lazily and belongs to this module alone, so the app still boots without a key
+and no other subsystem can exhaust this one's rate limit.
 
 ## Placeholders
 

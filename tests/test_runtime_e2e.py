@@ -4,7 +4,7 @@ Every test here drives the real chain — real OCR pipeline, real Merge Memory,
 real Reading Engine, real Reading Speed, real Audio Engine. Nothing is faked
 except the two things that reach outside the process: the speech provider (which
 would play audio) and the Groq client (which would cost money and vary between
-runs). `JsonOcrProvider` is not a mock; it is the real provider replaying
+runs). `ReplayAdapter` is not a mock; it is the real provider replaying
 recorded word boxes, which is how a page gets through OCR deterministically
 without a camera.
 
@@ -15,6 +15,7 @@ The categories the integration directive asks for, and where each lives:
     gesture         TestGestureScenarios
     memory          TestMergeMemoryScenarios
     reading speed   TestReadingSpeedScenarios
+    focus analysis  TestReadingFocusScenarios
     audio           TestAudioScenarios
     AI              TestAiScenarios
     runtime failure TestFailureScenarios
@@ -42,9 +43,10 @@ from backend.app.modules.gesture_engine.selection_models import (
     FingerPoint,
     SelectionStatus,
 )
-from backend.app.modules.ocr.providers import JsonOcrProvider
+from backend.app.modules.ocr.replay import ReplayAdapter
 from backend.app.modules.reading_engine.ai_bridge import AiBridge
 from backend.app.modules.reading_engine.runtime import ReadingRuntime
+from backend.app.modules.reading_speed.models import DifficultyLevel
 from backend.app.modules.reading_speed.service import ReadingSpeedService
 from backend.app.shared.constants import FIRST_PAGE_INDEX
 from backend.app.shared.events import SessionEvent
@@ -139,7 +141,7 @@ def recorded_page(text: str, *, words_per_line: int = 6, confidence: float = 0.9
 
     Geometry matters to the gesture tests: line pitch is 30px and words are 80px
     wide, so a fingertip at y=44 falls on the second line. Returned as the list
-    of dicts `JsonOcrProvider` replays.
+    of dicts `ReplayAdapter` replays.
     """
 
     out = []
@@ -155,6 +157,43 @@ def recorded_page(text: str, *, words_per_line: int = 6, confidence: float = 0.9
                 "line_index": row,
             }
         )
+    return out
+
+
+def recorded_paragraphs(*texts, words_per_line: int = 6, confidence: float = 0.95):
+    """Recorded OCR output for a page of several paragraphs.
+
+    `recorded_page` reports no paragraph index, so the pipeline renders it as one
+    block and Merge Memory holds one paragraph. That is the right fixture for
+    everything measured per *page*, and the wrong one for anything measured per
+    paragraph — a one-paragraph page cannot show a paragraph being left, ranked
+    against another, or credited with the wrong words.
+
+    Rows advance with a two-line gap between paragraphs so the geometry matches
+    the structure, which the gesture tests depend on even though these do not.
+    """
+
+    out = []
+    index = 0
+    row = 0
+    for paragraph_index, text in enumerate(texts):
+        for offset, word in enumerate(text.split()):
+            column = offset % words_per_line
+            if offset and column == 0:
+                row += 1
+            x, y = column * 90, row * 30
+            out.append(
+                {
+                    "text": word,
+                    "bbox": [x, y, x + 80, y + 24],
+                    "confidence": confidence,
+                    "word_index": index,
+                    "line_index": row,
+                    "paragraph_index": paragraph_index,
+                }
+            )
+            index += 1
+        row += 2
     return out
 
 
@@ -190,18 +229,21 @@ def audio(clock: Clock) -> PlaybackEngine:
     )
 
 
-def build_runtime(clock: Clock, *, audio=None, ai=None, provider=None) -> ReadingRuntime:
+def build_runtime(
+    clock: Clock, *, audio=None, ai=None, provider=None, focus: bool = True
+) -> ReadingRuntime:
     """The assembled chain, with the outside world stubbed and nothing else."""
 
     return ReadingRuntime.build(
         session_id="session-1",
         reader_id="reader-1",
-        ocr_provider=provider if provider is not None else JsonOcrProvider(),
+        ocr_provider=provider if provider is not None else ReplayAdapter(),
         audio=audio,
         ai=ai,
         book_id="book-1",
         clock=clock,
         speed=ReadingSpeedService(clock=clock),
+        focus=focus,
     )
 
 
@@ -535,10 +577,10 @@ class TestOcrScenarios:
         different name and checking every downstream observable is identical.
         """
 
-        class RenamedProvider(JsonOcrProvider):
+        class RenamedProvider(ReplayAdapter):
             provider_name = "recorded-fixture"
 
-        first = build_runtime(clock, provider=JsonOcrProvider())
+        first = build_runtime(clock, provider=ReplayAdapter())
         await first.feed_camera_frame(recorded_page(PAGE_ONE))
         await first.engine.start_session()
 
@@ -564,7 +606,7 @@ class TestOcrScenarios:
             def extract(self, source):
                 raise RuntimeError("vision API unreachable")
 
-        runtime = build_runtime(clock, provider=JsonOcrProvider())
+        runtime = build_runtime(clock, provider=ReplayAdapter())
         await runtime.feed_camera_frame(recorded_page(PAGE_ONE))
         await runtime.engine.start_session()
 
@@ -707,6 +749,94 @@ class TestGestureScenarios:
         assert handled > 0
         assert runtime.pending == []
         assert runtime.engine.state.pointer != pointer_before
+
+    @pytest.mark.asyncio
+    async def test_a_gesture_pointer_is_translated_into_merge_memorys_paragraphs(
+        self, clock, audio
+    ):
+        """Regression: Gesture's paragraph index is not Merge Memory's.
+
+        Vision reports a paragraph per visual block, so a photographed page comes
+        back as dozens of fragments; reconstruction rejoins them into the few the
+        page really has. A gesture reporting "paragraph 6 of 7" therefore names a
+        position that does not exist in a memory holding 2, and forwarding it
+        moved the pointer off the page: `current_text()` returned "", the AI was
+        sent no paragraph, and the audio queue was built from nothing.
+
+        Found on a real photograph — 47 OCR paragraphs reconstructed to 4, with
+        the reader pointing into raw-OCR paragraph 20.
+        """
+
+        # One OCR paragraph per line, which is what a photographed page looks
+        # like, reconstructed into the two paragraphs the page actually has.
+        page = recorded_page(PAGE_ONE, words_per_line=6)
+        for word in page:
+            word["paragraph_index"] = word["line_index"]
+
+        runtime = ReadingRuntime.build(
+            session_id="session-1",
+            reader_id="reader-1",
+            ocr_provider=ReplayAdapter(),
+            audio=audio,
+            clock=clock,
+            speed=ReadingSpeedService(clock=clock),
+            reconstruct=lambda held, new: (
+                "The lighthouse stood alone on the cliff. "
+                "Its lamp had not been lit for thirty years."
+                "\n\n"
+                "Mira had promised her grandfather she would climb it."
+            ),
+        )
+
+        await runtime.feed_camera_frame(page)
+        await runtime.engine.start_session()
+
+        held = runtime.engine.memory.paragraph_count(1)
+        assert held == 2, "the reconstruction fixture should collapse the page"
+        assert max(w["paragraph_index"] for w in page) >= held, (
+            "the OCR fixture must report more paragraphs than memory holds, "
+            "or this test cannot catch the bug"
+        )
+
+        clock.advance(15)
+        result = await runtime.feed_gesture_frame(
+            blank_frame(),
+            finger=FingerPoint(x=100.0, y=44.0, confidence=0.9, direction=(0.0, -1.0)),
+        )
+        assert result.status is SelectionStatus.SUCCESS
+
+        pointer = runtime.engine.state.pointer
+        assert pointer.paragraph_index < held, (
+            f"pointer landed on paragraph {pointer.paragraph_index} of a page "
+            f"holding {held} — Gesture's raw OCR index was forwarded untranslated"
+        )
+        # The observable consequence, and the reason this matters: there is text
+        # to explain and text to narrate.
+        assert runtime.engine.current_text().strip()
+
+    @pytest.mark.asyncio
+    async def test_a_gesture_on_unknown_text_leaves_the_pointer_alone(self, clock):
+        """A line Merge Memory does not hold must not move the pointer at all.
+
+        The reader can gesture at part of a page OCR has not read yet. Guessing a
+        paragraph from an untranslatable line is what would put the pointer
+        somewhere the text is empty.
+        """
+
+        runtime = build_runtime(clock)
+        await runtime.feed_camera_frame(recorded_page(PAGE_ONE))
+        await runtime.engine.start_session()
+
+        before = runtime.engine.state.pointer
+        await runtime.engine.handle_gesture_event(
+            SessionEvent.READING_POINTER_UPDATED,
+            runtime._translate(
+                SessionEvent.READING_POINTER_UPDATED,
+                {"line_text": "zzz qqq xxx", "paragraph_index": 20, "line_index": 20},
+            ),
+        )
+
+        assert runtime.engine.state.pointer == before
 
     @pytest.mark.asyncio
     async def test_a_low_confidence_gesture_publishes_nothing(self, clock):
@@ -948,6 +1078,354 @@ class TestReadingSpeedScenarios:
         analytics = await runtime.engine.finish_session()
 
         assert analytics.tts_assisted
+
+
+# ------------------------------------------------------- focus analysis scenarios
+
+
+PARAGRAPH_ONE = (
+    "The lighthouse stood alone on the cliff and had done so for as long as "
+    "anyone in the village could remember."
+)
+PARAGRAPH_TWO = (
+    "Its lamp had not been lit for thirty years, and the mechanism that turned "
+    "it had seized long before that."
+)
+PARAGRAPH_THREE = (
+    "Mira had promised her grandfather she would climb it before the winter "
+    "storms arrived and closed the path."
+)
+
+
+class TestReadingFocusScenarios:
+    """Reading Focus Analysis observes the session. It never steers it.
+
+    The unit tests in `test_focus_analytics.py` prove the engine's arithmetic
+    against handed-in observations. What only a session can prove is that the
+    observations are the *right* ones: that the paragraph the report names is the
+    paragraph the pointer was in, that the words counted are Merge Memory's words,
+    and that a meaning request lands against the paragraph the reader was reading
+    rather than the one the AI answered about.
+    """
+
+    async def _three_paragraph_page(self, runtime):
+        await runtime.feed_camera_frame(
+            recorded_paragraphs(PARAGRAPH_ONE, PARAGRAPH_TWO, PARAGRAPH_THREE)
+        )
+        assert runtime.engine.memory.paragraph_count(FIRST_PAGE_INDEX) == 3
+
+    def _at(self, runtime, paragraph_index: int, sentence_index: int = 0):
+        return runtime.engine.state.pointer.model_copy(
+            update={"paragraph_index": paragraph_index, "sentence_index": sentence_index}
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_report_names_the_paragraphs_the_reader_was_actually_in(self, clock):
+        """The observation seam, end to end.
+
+        Three paragraphs entered in order must appear in the report in that order,
+        with the word counts Merge Memory holds — not counts this engine derived
+        for itself, which is the drift the module is forbidden from introducing.
+        """
+
+        runtime = build_runtime(clock)
+        await self._three_paragraph_page(runtime)
+        await runtime.engine.start_session()
+
+        clock.advance(20)
+        await runtime.engine.move_pointer(self._at(runtime, 1))
+        clock.advance(20)
+        await runtime.engine.move_pointer(self._at(runtime, 2))
+        clock.advance(20)
+        await runtime.engine.finish_session(review=False)
+
+        report = runtime.engine.focus_report
+        assert [p.key for p in report.paragraphs] == [
+            (FIRST_PAGE_INDEX, 0),
+            (FIRST_PAGE_INDEX, 1),
+            (FIRST_PAGE_INDEX, 2),
+        ]
+
+        memory = runtime.engine.memory
+        for paragraph in report.paragraphs:
+            held = memory.paragraph(paragraph.page_index, paragraph.paragraph_index)
+            assert paragraph.words == len(held.split())
+
+    @pytest.mark.asyncio
+    async def test_a_meaning_request_is_charged_to_the_paragraph_being_read(self, clock):
+        """Friction belongs to where the reader was, not where the pointer went next."""
+
+        runtime = build_runtime(clock, ai=bridge())
+        await self._three_paragraph_page(runtime)
+        await runtime.engine.start_session()
+
+        clock.advance(15)
+        await runtime.engine.move_pointer(self._at(runtime, 1))
+
+        clock.advance(10)
+        await runtime.engine.meaning_mode_on(word="mechanism")
+        clock.advance(30)
+        await runtime.engine.meaning_mode_off()
+
+        clock.advance(15)
+        await runtime.engine.move_pointer(self._at(runtime, 2))
+        clock.advance(15)
+        await runtime.engine.finish_session(review=False)
+
+        by_key = {p.key: p for p in runtime.engine.focus_report.paragraphs}
+        assert by_key[(FIRST_PAGE_INDEX, 1)].meaning_requests == 1
+        assert by_key[(FIRST_PAGE_INDEX, 1)].lookups == 1
+        assert by_key[(FIRST_PAGE_INDEX, 0)].meaning_requests == 0
+        assert by_key[(FIRST_PAGE_INDEX, 2)].meaning_requests == 0
+
+    @pytest.mark.asyncio
+    async def test_the_thirty_seconds_spent_in_meaning_mode_are_not_reading_time(
+        self, clock
+    ):
+        """Looking a word up must never also make the reader look slow.
+
+        The lookup is already counted as friction. Letting the same seconds inflate
+        the paragraph's reading time would score one moment of confusion twice, and
+        the paragraph would rank above one the reader genuinely struggled through
+        in silence.
+        """
+
+        runtime = build_runtime(clock, ai=bridge())
+        await self._three_paragraph_page(runtime)
+        await runtime.engine.start_session()
+
+        clock.advance(20)
+        await runtime.engine.meaning_mode_on(word="lighthouse")
+        clock.advance(300)
+        await runtime.engine.meaning_mode_off()
+
+        clock.advance(10)
+        await runtime.engine.finish_session(review=False)
+
+        opening = runtime.engine.focus_report.paragraphs[0]
+        # 30s of reading either side of a five-minute lookup.
+        assert opening.actual_ms == pytest.approx(30_000, abs=1_000)
+
+    @pytest.mark.asyncio
+    async def test_a_paused_session_is_not_an_idle_reader(self):
+        """A pause is the reader saying they have stopped. Idle time is the inference.
+
+        Reporting the pause as idle time would mean every reader who put the book
+        down deliberately came back to a report telling them they had drifted off.
+
+        Asserted as a difference rather than as zero, which is the only form that
+        isolates the claim. This paragraph *does* accrue a little idle time either
+        way — 40 seconds of real reading on a 21-word paragraph is longer than the
+        allowance, and the trailing-gap rule is right to say so. What must be true
+        is that the ten-minute pause added none of it.
+        """
+
+        async def session(*, with_pause: bool) -> int:
+            local_clock = Clock()
+            runtime = build_runtime(local_clock)
+            await self._three_paragraph_page(runtime)
+            await runtime.engine.start_session()
+
+            local_clock.advance(20)
+            if with_pause:
+                await runtime.engine.pause()
+                local_clock.advance(600)
+                await runtime.engine.resume()
+            local_clock.advance(20)
+            await runtime.engine.finish_session(review=False)
+            return runtime.engine.focus_report.total_idle_ms
+
+        paused = await session(with_pause=True)
+        straight_through = await session(with_pause=False)
+
+        assert paused == straight_through
+        # And the ten minutes are nowhere in the report.
+        assert paused < 600_000
+
+    @pytest.mark.asyncio
+    async def test_a_page_turn_closes_the_paragraph_the_reader_left(self, clock):
+        """A turn is a paragraph change with a new page index, and must close the old one.
+
+        If the page turn did not close it, the paragraph left behind would keep
+        accruing the next page's time and the report would blame the wrong text.
+        """
+
+        runtime = build_runtime(clock)
+        await self._three_paragraph_page(runtime)
+        await runtime.engine.start_session()
+
+        clock.advance(30)
+        await runtime.feed_camera_frame(recorded_paragraphs(PAGE_TWO))
+
+        clock.advance(30)
+        await runtime.engine.finish_session(review=False)
+
+        report = runtime.engine.focus_report
+        pages = {p.page_index for p in report.paragraphs}
+        assert pages == {FIRST_PAGE_INDEX, FIRST_PAGE_INDEX + 1}
+
+        opening = report.paragraphs[0]
+        assert opening.key == (FIRST_PAGE_INDEX, 0)
+        assert opening.actual_ms == pytest.approx(30_000, abs=1_000)
+
+    @pytest.mark.asyncio
+    async def test_a_gesture_that_moves_the_pointer_is_observed_too(self, clock):
+        """The focus engine sits behind the pointer, not behind a particular caller.
+
+        A gesture reaches `move_pointer` through the queue rather than through a
+        direct call, and an observer wired to only one of those paths would miss
+        every paragraph a reader reached by pointing at it.
+        """
+
+        runtime = build_runtime(clock)
+        await self._three_paragraph_page(runtime)
+        await runtime.engine.start_session()
+
+        clock.advance(15)
+        await runtime.feed_gesture_frame(
+            blank_frame(),
+            finger=FingerPoint(x=100.0, y=104.0, confidence=0.9, direction=(0.0, -1.0)),
+        )
+
+        clock.advance(15)
+        await runtime.engine.finish_session(review=False)
+
+        observed = {p.key for p in runtime.engine.focus_report.paragraphs}
+        assert observed == {
+            (FIRST_PAGE_INDEX, p.paragraph_index)
+            for p in [runtime.engine.state.pointer]
+        } | {(FIRST_PAGE_INDEX, 0)}
+
+    @pytest.mark.asyncio
+    async def test_it_reports_nothing_difficult_without_a_calibrated_baseline(self, clock):
+        """A default baseline is a guess, and deviation from a guess is not evidence.
+
+        The session is deliberately slow. Every paragraph must still come back
+        UNKNOWN, because the reader has never been measured and the engine has
+        nothing to be slow *relative to*.
+        """
+
+        runtime = build_runtime(clock)
+        await self._three_paragraph_page(runtime)
+        await runtime.engine.start_session()
+
+        clock.advance(200)
+        await runtime.engine.move_pointer(self._at(runtime, 1))
+        clock.advance(200)
+        await runtime.engine.finish_session(review=False)
+
+        report = runtime.engine.focus_report
+        assert not report.baseline_was_evidence
+        assert all(p.difficulty is DifficultyLevel.UNKNOWN for p in report.paragraphs)
+
+    @pytest.mark.asyncio
+    async def test_a_measured_reader_gets_a_ranking(self, clock):
+        """With a real baseline and real friction, the hard paragraph comes top.
+
+        Calibrated from a timed passage at 200 wpm — `calibrate` rather than
+        `set_manual_baseline`, because a self-reported pace is MANUAL and
+        `is_evidence` rejects it on purpose: a reader's claim about their own speed
+        is not a measurement to rate paragraphs against.
+
+        At 200 wpm a 22-word paragraph is expected to take about 6.6 seconds. The
+        second paragraph takes ten times that *and* the reader asks what a word
+        means — both halves of the evidence — while the first and third are on pace.
+        """
+
+        runtime = build_runtime(clock, ai=bridge())
+        runtime.engine.speed.calibrate("reader-1", word_count=200, elapsed_ms=60_000)
+
+        await self._three_paragraph_page(runtime)
+        await runtime.engine.start_session()
+
+        clock.advance(7)
+        await runtime.engine.move_pointer(self._at(runtime, 1))
+
+        clock.advance(30)
+        await runtime.engine.meaning_mode_on(word="mechanism")
+        await runtime.engine.meaning_mode_off()
+        clock.advance(30)
+
+        await runtime.engine.move_pointer(self._at(runtime, 2))
+        clock.advance(7)
+        await runtime.engine.finish_session(review=False)
+
+        report = runtime.engine.focus_report
+        assert report.baseline_wpm == 200.0
+
+        hardest = report.needs_attention(limit=1)
+        assert hardest
+        assert hardest[0].key == (FIRST_PAGE_INDEX, 1)
+        assert hardest[0].difficulty is DifficultyLevel.MEDIUM
+
+    @pytest.mark.asyncio
+    async def test_the_report_is_judged_against_the_baseline_as_it_ends(self, clock):
+        """Calibration arriving mid-session must apply to the whole session.
+
+        The focus engine is built with whatever baseline the reader had when the
+        session opened, which for a first session is a default. If the report were
+        judged against that stale copy, a reader who calibrated at minute one would
+        get a session's worth of UNKNOWN paragraphs for no reason.
+        """
+
+        runtime = build_runtime(clock)
+        await self._three_paragraph_page(runtime)
+        await runtime.engine.start_session()
+        assert not runtime.engine.focus.baseline.is_evidence
+
+        clock.advance(10)
+        runtime.engine.speed.calibrate("reader-1", word_count=200, elapsed_ms=60_000)
+
+        clock.advance(70)
+        await runtime.engine.move_pointer(self._at(runtime, 1))
+        clock.advance(10)
+        await runtime.engine.finish_session(review=False)
+
+        report = runtime.engine.focus_report
+        assert report.baseline_was_evidence
+        assert report.baseline_wpm == 200.0
+        assert any(p.difficulty is not DifficultyLevel.UNKNOWN for p in report.paragraphs)
+
+    @pytest.mark.asyncio
+    async def test_it_never_moves_the_pointer_or_touches_playback(self, clock, audio):
+        """The prohibition, asserted over a whole session rather than promised.
+
+        The focus engine is fed every event the session produces. The pointer at
+        the end must be exactly where the Reading Engine last wrote it, and the
+        audio engine must be in the state the *session* left it in.
+        """
+
+        runtime = build_runtime(clock, audio=audio, ai=bridge())
+        await self._three_paragraph_page(runtime)
+        await runtime.engine.start_session()
+
+        clock.advance(20)
+        await runtime.engine.move_pointer(self._at(runtime, 1))
+        expected_pointer = runtime.engine.state.pointer
+        expected_state = audio.get_status().state
+
+        clock.advance(20)
+        runtime.engine.focus.report()
+        runtime.engine.focus.observations()
+
+        assert runtime.engine.state.pointer == expected_pointer
+        assert audio.get_status().state is expected_state
+
+    @pytest.mark.asyncio
+    async def test_a_session_without_a_focus_engine_is_still_a_session(self, clock, audio):
+        """Optional in the strongest sense: no engine, no report, no other difference."""
+
+        runtime = build_runtime(clock, audio=audio, focus=False)
+        await self._three_paragraph_page(runtime)
+        await runtime.engine.start_session()
+
+        clock.advance(40)
+        analytics = await runtime.engine.finish_session(review=False)
+
+        assert runtime.engine.focus is None
+        assert runtime.engine.focus_report is None
+        assert analytics.words_read > 0
+        assert runtime.engine.state.is_finished
 
 
 # -------------------------------------------------------------- audio scenarios

@@ -25,13 +25,15 @@ a slightly worse read beats no read.
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from backend.app.modules.ocr.models import RecognizedWord
 from backend.app.modules.ocr.providers import (
     OcrProviderError,
-    get_provider,
+    get_ocr_engine,
 )
 
 try:  # pragma: no cover - absence is the branch under test
@@ -59,33 +61,95 @@ MIN_WORDS_FOR_A_PAGE = 5
 # `merge_memory/engine.py` exactly.
 _PARAGRAPH_BREAK = "\n\n"
 
-# Punctuation Vision reports as its own word box. Joined to the preceding word
-# rather than left floating in a space: "realize , greatly" is what a plain
-# space-join produces, and it reaches sentence segmentation, the OLED and TTS
-# looking like that. A set, not a string — `in` on a string is a substring test,
-# which would match "" and mis-handle a two-character token.
+logger = logging.getLogger(__name__)
+
+# The fallback spacing rules, for sources that report no break of their own.
+# Google Vision does report one for every word, so on the production path these
+# are never consulted — they exist for the replay adapter's fixture format, where
+# words are written down by hand and `space_after` defaults to True.
+#
+# Three sets because punctuation attaches in three directions: `.` and `,` close
+# the word before them, `(` and `$` open the word after, and `-` and `/` do both
+# at once. They only ever join words that would otherwise be spaced, never split
+# ones a source joined, so a provider that does report breaks cannot be overruled.
 _TRAILING_PUNCTUATION = frozenset(".,;:!?)]}%")
+_JOINING_PUNCTUATION = frozenset("-/")
+_LEADING_PUNCTUATION = frozenset("([{$")
 
 
-def _join_words(words: list[str]) -> str:
-    """Join one paragraph's words, attaching trailing punctuation.
+def _join_words(words: Sequence[RecognizedWord]) -> str:
+    """Join one paragraph's words, spacing them the way the page was printed.
 
-    The standalone got this for free by using Vision's `fullTextAnnotation.text`.
-    That string cannot be used here — it carries no paragraph structure at all
-    (Vision emits single newlines at every printed line end and never a blank
-    line), and structure is what Merge Memory rebuilds the page's shape from. So
-    the text is built from the word hierarchy, which has the structure, and this
-    restores the one thing the flat string did better.
+    Spacing comes from `space_after`, which for Google Vision is its own
+    `detectedBreak` verdict on each word's last symbol. Guessing it from the
+    characters instead cannot work: `"` is the same character opening and
+    closing, so `"Son!"` renders as `" Son ! "` — punctuation floating in
+    spaces, reaching sentence segmentation, the OLED and TTS looking like that.
+    Vision already knows which side each mark binds to, so it is asked.
+
+    The standalone got this for free from `fullTextAnnotation.text`. That string
+    cannot be used here — it carries no paragraph structure at all (Vision emits
+    a single newline at every printed line end and never a blank line), and
+    structure is what Merge Memory rebuilds the page's shape from. So the text is
+    built from the word hierarchy, which has the structure, and the break signal
+    restores the one thing the flat string did better. Confirmed word-for-word
+    against the reference's output on three real page photographs.
+
+    Sources that report no break leave `space_after` at its default of True; the
+    character classes above are what keep punctuation attached for those.
     """
 
     result: list[str] = []
+    attach_next = False
+
     for word in words:
-        if result and word in _TRAILING_PUNCTUATION:
-            result[-1] += word
+        text = word.text
+        # A joiner closes the word before it as well as opening the one after, so
+        # it is the one kind that appears in both halves of this loop.
+        joins_backward = text in _TRAILING_PUNCTUATION or text in _JOINING_PUNCTUATION
+
+        if result and (attach_next or joins_backward):
+            result[-1] += text
         else:
-            result.append(word)
+            result.append(text)
+
+        attach_next = (
+            not word.space_after
+            or text in _JOINING_PUNCTUATION
+            or text in _LEADING_PUNCTUATION
+        )
 
     return " ".join(result)
+
+
+def _as_text(words: Sequence[RecognizedWord]) -> str:
+    """Render recognised words as page text, grouped into paragraphs.
+
+    Grouped by `paragraph_index` rather than joined with spaces throughout. The
+    provider goes to the trouble of reporting paragraph structure and Merge Memory
+    splits on a blank line to rebuild it; joining every word with a space threw
+    that away in between, so a 40-paragraph page arrived as one 281-word run.
+    Sentence segmentation, the reading pointer and the audio queue are all
+    downstream of that shape.
+
+    A module-level function rather than only a property because two callers need
+    it: the held page (`text`) and a candidate frame being weighed for a page
+    turn. Two copies of this grouping would be two ways for a page to be shaped.
+    """
+
+    if not words:
+        return ""
+
+    paragraphs: list[list[RecognizedWord]] = []
+    current: int | None = None
+    for word in words:
+        index = getattr(word, "paragraph_index", None)
+        if index != current or not paragraphs:
+            paragraphs.append([])
+            current = index
+        paragraphs[-1].append(word)
+
+    return _PARAGRAPH_BREAK.join(_join_words(group) for group in paragraphs if group)
 
 
 @dataclass(frozen=True)
@@ -128,12 +192,24 @@ class OcrPipeline:
     # geometric merge without this file knowing which one ran.
     merge_text: Callable[[str, str], str] | None = None
 
+    # Second opinion on a page turn, given (held_text, new_text) -> "same page?".
+    # `detect_new_page` compares word sets, which cannot tell a page turn from a
+    # camera that moved: a shaky or partial capture of the *same* page shares few
+    # exact words with what is held, and acting on that commits a half-read page
+    # and resets the reading pointer mid-sentence. The reference implementation
+    # asked Groq on every frame for exactly this reason.
+    #
+    # Left as None the geometric verdict stands, so a session without a key still
+    # turns pages — just more eagerly. This is a callable rather than an import
+    # because the pipeline must not know an LLM exists.
+    confirm_page_change: Callable[[str, str], bool] | None = None
+
     _words: tuple[RecognizedWord, ...] = field(default_factory=tuple, init=False)
     _version: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
         if self.provider is None:
-            self.provider = get_provider()
+            self.provider = get_ocr_engine()
 
     @property
     def version(self) -> int:
@@ -155,30 +231,11 @@ class OcrPipeline:
     def text(self) -> str:
         """The held page as text, with paragraph breaks preserved.
 
-        Grouped by `paragraph_index` rather than joined with spaces throughout.
-        The provider goes to the trouble of reporting paragraph structure and
-        Merge Memory splits on a blank line to rebuild it; joining every word
-        with a space threw that away in between, so a 40-paragraph page arrived
-        as one 281-word run. Sentence segmentation, the reading pointer and the
-        audio queue are all downstream of that shape.
-
         Words within a paragraph keep the provider's order, which is the reading
         order it resolved from the geometry.
         """
 
-        if not self._words:
-            return ""
-
-        paragraphs: list[list[str]] = []
-        current: int | None = None
-        for word in self._words:
-            index = getattr(word, "paragraph_index", None)
-            if index != current or not paragraphs:
-                paragraphs.append([])
-                current = index
-            paragraphs[-1].append(word.text)
-
-        return _PARAGRAPH_BREAK.join(_join_words(group) for group in paragraphs if group)
+        return _as_text(self._words)
 
     def process_frame(self, source: Any) -> tuple[RecognizedWord, ...]:
         """Recognise the words in one frame. No state is changed.
@@ -204,8 +261,9 @@ class OcrPipeline:
         standalone version sent both texts to Groq for a YES/NO, which cost a
         network round trip on every single frame and defaulted to "same page" on
         any error — so an outage silently disabled page detection. Set overlap is
-        free, deterministic, and testable; the LLM is kept for reconstructing
-        text, where it earns its latency.
+        free, deterministic, and testable; the LLM is kept as the confirming
+        second opinion in `confirm_page_change`, where it only ever prevents a
+        false turn.
         """
 
         if not self._words or not words:
@@ -294,6 +352,22 @@ class OcrPipeline:
             )
 
         page_changed = self.detect_new_page(words)
+        if page_changed and self.confirm_page_change is not None and self._words:
+            # Geometry proposed a turn; ask the semantic check to confirm it
+            # before a page is committed. Only ever downgrades a turn to a merge —
+            # it cannot invent one — because the failure it exists to prevent is
+            # the false positive.
+            candidate_text = _as_text(words)
+            try:
+                if self.confirm_page_change(self.text, candidate_text):
+                    page_changed = False
+            except Exception as error:  # pragma: no cover - defensive
+                # A failed second opinion must not lose the frame; keep the
+                # geometric verdict, which is what ran before this gate existed.
+                logger.warning(
+                    "page-change confirmation failed (%s); keeping OCR's verdict", error
+                )
+
         if page_changed:
             # A new page replaces rather than merges. Merging across a turn is
             # what produces text that reads as two pages interleaved.

@@ -305,6 +305,15 @@ class PlaybackEngine:
 
         While idle or paused the jump applies at once, since nothing is in
         flight to protect.
+
+        A seek that arrives after the page ran out of sentences restarts
+        playback. FINISHED means "nothing left to speak", not "this page is
+        over": the reader is still on it, and a gesture pointing at a later
+        paragraph hands over text that was never queued. Without the restart the
+        queue fills and no loop is alive to drain it, so narration stops for the
+        rest of the page and only a page turn brings it back. A one-fragment
+        paragraph — routine on a real OCR page, where the reader's hand cuts a
+        line down to a word — is enough to trigger it.
         """
 
         async with self._lock:
@@ -344,7 +353,27 @@ class PlaybackEngine:
                 return self._machine.state
 
             self._pointer.update(pointer)
-            return self._machine.state
+
+            # Nothing was in flight. If the page had run dry and this seek
+            # brought sentences with it, the loop has already returned and has to
+            # be restarted — see the note in the docstring. PAUSED is left alone:
+            # the reader stopped on purpose, and `resume()` is what undoes that.
+            revive = self._machine.state is PlaybackState.FINISHED and bool(self._queue)
+            if revive:
+                # READY zeroes the machine's clock, so bank the page's reading
+                # time first — the same reason `start()` carries it on a page turn.
+                self._stats.carried_reading_ms += self._machine.elapsed_reading_ms
+                self._machine.transition_to(PlaybackState.READY)
+                self._machine.transition_to(PlaybackState.PLAYING)
+                self._log(
+                    "playback_revived",
+                    pointer=pointer.sentence_order_key(),
+                    sentences=self._queue.size(),
+                )
+
+        if revive:
+            self._spawn_loop()
+        return self._machine.state
 
     async def refresh_queue(
         self,

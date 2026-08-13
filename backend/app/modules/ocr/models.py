@@ -76,6 +76,15 @@ class RecognizedWord(BaseModel):
     line_index: int = -1
     paragraph_index: int = -1
 
+    # Whether a space follows this word in the printed line. Vision knows —
+    # `detectedBreak` on the word's last symbol says SPACE, LINE_BREAK, HYPHEN or
+    # nothing at all — and "nothing at all" is what a quote, a bracket or a
+    # mid-word hyphen produces. Without carrying it, page text has to guess from
+    # the character, and a `"` that opens is indistinguishable from one that
+    # closes: `"Son!"` comes out as `" Son ! "`. Defaults to True because a space
+    # between words is the ordinary case and every non-Vision source means that.
+    space_after: bool = True
+
     @classmethod
     def from_bbox(
         cls,
@@ -86,6 +95,7 @@ class RecognizedWord(BaseModel):
         word_index: int = -1,
         line_index: int = -1,
         paragraph_index: int = -1,
+        space_after: bool = True,
     ) -> "RecognizedWord":
         """Build a word from its box, deriving the centre.
 
@@ -103,6 +113,7 @@ class RecognizedWord(BaseModel):
             word_index=word_index,
             line_index=line_index,
             paragraph_index=paragraph_index,
+            space_after=space_after,
         )
 
     @property

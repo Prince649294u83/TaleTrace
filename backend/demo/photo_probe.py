@@ -30,7 +30,7 @@ from backend.app.modules.gesture_engine.pipeline import GesturePipeline
 from backend.app.modules.gesture_engine.selection_models import FingerPoint
 from backend.app.modules.merge_memory.engine import MergeMemory
 from backend.app.modules.ocr.pipeline import OcrPipeline
-from backend.app.modules.ocr.providers import OcrProviderError, get_provider
+from backend.app.modules.ocr.providers import OcrProviderError, get_ocr_engine
 
 
 def load_env(path: Path) -> list[str]:
@@ -55,10 +55,10 @@ def load_env(path: Path) -> list[str]:
     return loaded
 
 
-def run_ocr(image: Path, provider_name: str) -> tuple[OcrPipeline, MergeMemory, object]:
+def run_ocr(image: Path) -> tuple[OcrPipeline, MergeMemory, object]:
     """The OCR half: photo to versioned page text in Merge Memory."""
 
-    provider = get_provider(provider_name)
+    provider = get_ocr_engine()
     pipeline = OcrPipeline(provider)
     memory = MergeMemory()
 
@@ -197,7 +197,6 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("backend/app/OCRandGESTURE/.env"),
         help="file holding GOOGLE_VISION_API_KEY",
     )
-    parser.add_argument("--provider", default="google_vision")
     parser.add_argument("--word", default="", help="word to point at (default: the longest)")
     args = parser.parse_args(argv)
 
@@ -211,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  env                {args.env} ({', '.join(loaded) or 'nothing loaded'})")
 
     try:
-        pipeline, memory, result = run_ocr(args.image, args.provider)
+        pipeline, memory, result = run_ocr(args.image)
     except OcrProviderError as error:
         # Named separately from an unexpected crash: this is the provider saying
         # no, and the fix is a credential or a network, not a code change.

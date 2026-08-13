@@ -7,6 +7,8 @@
         |                               |    |
         |                               |    +──> PlaybackEngine (narration)
         +──> GesturePipeline ─events─┘    +──> AiBridge (meaning, review)
+                                        |
+                                        +──> FocusAnalyticsEngine (observes only)
 
 `ReadingEngine` sequences the modules; this builds them and connects the two
 edges that cannot be expressed as a direct call.
@@ -19,12 +21,19 @@ published events land in a queue here and are drained into the engine's async
 handlers. The gesture pipeline still never calls another module; it hands an
 event to a callback and returns.
 
-Edge two: Gesture reports lines, the pointer counts sentences. A line of OCR text
-is not a sentence — a sentence spans two or three lines, and one line can end a
-sentence and begin another. Translating between them needs the paragraph text,
-which Gesture does not have and should not be given. `_sentence_for_line` does it
-here, against Merge Memory's paragraph and the Audio Engine's own segmenter, so
-the pointer Gesture causes and the sentence Audio speaks agree by construction.
+Edge two: Gesture counts paragraphs and lines the way OCR saw them, the pointer
+counts paragraphs and sentences the way Merge Memory holds them, and those are
+two different coordinate systems. A line of OCR text is not a sentence — a
+sentence spans two or three lines, and one line can end a sentence and begin
+another. Nor is an OCR paragraph a Merge Memory paragraph: Vision reports a
+paragraph per visual block, so a photographed page comes back as dozens of
+fragments, and reconstruction rejoins them into the handful the page actually
+has. A gesture reporting "paragraph 20" of 47 means nothing to a memory holding 4.
+
+Translating both needs the page text, which Gesture does not have and should not
+be given. `_locate_line` does it here, against Merge Memory's paragraphs and the
+Audio Engine's own segmenter, so the pointer Gesture causes and the sentence Audio
+speaks agree by construction.
 """
 
 from __future__ import annotations
@@ -36,6 +45,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from backend.app.modules.audio_engine.sentence_queue import segment_sentences
+from backend.app.modules.focus_analytics import FocusAnalyticsEngine
 from backend.app.modules.gesture_engine.pipeline import GesturePipeline
 from backend.app.modules.gesture_engine.selection_models import FingerPoint, SelectionResult
 from backend.app.modules.merge_memory.engine import MergeMemory
@@ -87,8 +97,10 @@ class ReadingRuntime:
         book_id: str | None = None,
         clock: Callable[[], float] | None = None,
         reconstruct: Callable[[str, str], str] | None = None,
+        confirm_page_change: Callable[[str, str], bool] | None = None,
         memory: MergeMemory | None = None,
         speed: ReadingSpeedService | None = None,
+        focus: bool = True,
     ) -> ReadingRuntime:
         """Assemble a session from parts, defaulting each to its real implementation.
 
@@ -100,6 +112,19 @@ class ReadingRuntime:
         `memory` and `speed` are accepted because they may already exist — a
         `ReadingSpeedService` holds one reader's calibrated baseline across
         sessions, and rebuilding it per session would discard the calibration.
+
+        `reconstruct` and `confirm_page_change` are the two halves of the
+        Groq-backed Merge Engine, passed in rather than constructed here so a
+        session can run without a key and a test can run without a network. See
+        `build_live` for the wiring that supplies both.
+
+        `focus` is a flag rather than an instance, unlike every other
+        collaborator here. There is nothing to substitute: the Reading Focus
+        Analysis engine has no network, no provider and no failure mode worth
+        faking, and it needs the same `memory` and `clock` this method has just
+        settled on. Passing one in would mean a caller could hand it a *different*
+        Merge Memory than the session's, and the word counts in the report would
+        then describe a book nobody read.
         """
 
         shared_memory = memory if memory is not None else MergeMemory(reconstruct=reconstruct)
@@ -109,6 +134,19 @@ class ReadingRuntime:
         )
 
         pipeline = OcrPipeline(provider=ocr_provider) if ocr_provider else OcrPipeline()
+        pipeline.confirm_page_change = confirm_page_change
+
+        focus_engine = (
+            FocusAnalyticsEngine(
+                session_id=session_id,
+                reader_id=reader_id,
+                memory=shared_memory,
+                baseline=shared_speed.baseline_for(reader_id),
+                **({"clock": clock} if clock else {}),
+            )
+            if focus
+            else None
+        )
 
         engine = ReadingEngine(
             session_id=session_id,
@@ -118,6 +156,7 @@ class ReadingRuntime:
             ocr=pipeline,
             audio=audio,
             ai=ai,
+            focus=focus_engine,
             book_id=book_id,
             **({"clock": clock} if clock else {}),
         )
@@ -125,6 +164,56 @@ class ReadingRuntime:
         gesture = GesturePipeline(**({"clock": clock} if clock else {}))
 
         return cls(engine=engine, gesture=gesture)
+
+    @classmethod
+    def build_live(
+        cls,
+        *,
+        session_id: str,
+        reader_id: str,
+        book_id: str | None = None,
+        audio: Any = None,
+        ai: Any = None,
+        speed: ReadingSpeedService | None = None,
+    ) -> ReadingRuntime:
+        """The production wiring: Google Vision, Groq reconstruction, real Gesture.
+
+        The one place the live chain is assembled, so there is no second way to
+        start a session. `build` stays the general form that tests and demos use;
+        this is `build` with the production collaborators filled in.
+
+        Both halves of the Merge Engine come from one `GroqReconstructor`: the
+        same client answers "merge these two texts" and "is this the same page",
+        and giving them separate instances would open two clients per session.
+        That client is the Merge Engine's own, built from `GROQ_API_KEY_2`. The AI
+        Engine builds its own from `GROQ_API_KEY_1` and is passed in as `ai` — the
+        two subsystems share no client, so a rate limit on the camera loop cannot
+        stop a reader from asking what a word means.
+        """
+
+        from backend.app.modules.merge_memory.reconstruction import GroqReconstructor
+        from backend.app.modules.ocr.providers import get_ocr_engine
+
+        reconstructor = GroqReconstructor()
+        if not reconstructor.available:
+            # Said once, at startup, naming the consequence rather than the
+            # variable: text will still flow, it will just be rougher.
+            logger.warning(
+                "GROQ_API_KEY_2 is not set — page text will be raw OCR with no "
+                "semantic reconstruction, and page turns will use geometry alone"
+            )
+
+        return cls.build(
+            session_id=session_id,
+            reader_id=reader_id,
+            book_id=book_id,
+            ocr_provider=get_ocr_engine(),
+            audio=audio,
+            ai=ai,
+            speed=speed,
+            reconstruct=reconstructor,
+            confirm_page_change=reconstructor.is_same_page,
+        )
 
     # -------------------------------------------------------------------- frames
 
@@ -209,28 +298,36 @@ class ReadingRuntime:
     def _translate(
         self, event: SessionEvent, payload: dict[str, Any]
     ) -> dict[str, Any]:
-        """Fill in what Gesture cannot know: which sentence a line belongs to."""
+        """Fill in what Gesture cannot know: where its line sits in Merge Memory."""
 
         if event is not SessionEvent.READING_POINTER_UPDATED:
             return payload
 
-        sentence = self._sentence_for_line(str(payload.get("line_text", "")))
-        if sentence is None:
+        located = self._locate_line(str(payload.get("line_text", "")))
+        if located is None:
             # No match: the line came from text Merge Memory does not hold yet,
             # which happens when a gesture arrives before the frame that read
-            # that part of the page. Dropping the sentence index leaves the
-            # engine on the pointer it has, which is better than guessing.
-            return payload
+            # that part of the page. Dropping both indices leaves the engine on
+            # the pointer it has, which is better than guessing — and better than
+            # forwarding Gesture's raw OCR paragraph index, which is a position in
+            # a different coordinate system and would move the pointer off the page.
+            return {k: v for k, v in payload.items() if k != "paragraph_index"}
 
-        return {**payload, "sentence_index": sentence}
+        paragraph, sentence = located
+        return {**payload, "paragraph_index": paragraph, "sentence_index": sentence}
 
-    def _sentence_for_line(self, line_text: str) -> int | None:
-        """Which sentence of the current paragraph a line of OCR text falls in.
+    def _locate_line(self, line_text: str) -> tuple[int, int] | None:
+        """Where a line of OCR text falls in Merge Memory: (paragraph, sentence).
 
         Matched by word overlap rather than substring: the line comes from OCR
-        and the paragraph from Merge Memory's merge of several frames, so the two
-        rarely agree character for character even when they describe the same
-        words. The same reason `detect_new_page` compares word sets.
+        and the paragraphs from Merge Memory's reconstruction of several frames,
+        so the two rarely agree character for character even when they describe
+        the same words. The same reason `detect_new_page` compares word sets.
+
+        The whole page is searched, not just the paragraph the pointer is in,
+        because finding the paragraph is half the question being asked. A reader
+        pointing at a word four paragraphs down has moved paragraph as well as
+        sentence, and only the text can say which one they landed in.
         """
 
         words = {w.lower().strip(".,;:!?\"'") for w in line_text.split()}
@@ -238,23 +335,24 @@ class ReadingRuntime:
         if not words:
             return None
 
-        paragraph = self.engine.current_text()
-        if not paragraph.strip():
-            return None
-
-        best_index: int | None = None
+        page = self.engine.state.pointer.page_index
+        best: tuple[int, int] | None = None
         best_overlap = 0
 
-        for chunk in segment_sentences(paragraph):
-            candidate = {w.lower().strip(".,;:!?\"'") for w in chunk.text.split()}
-            overlap = len(words & candidate)
-            if overlap > best_overlap:
-                best_overlap = overlap
-                best_index = chunk.pointer.sentence_index
+        for paragraph_index in range(self.engine.memory.paragraph_count(page)):
+            paragraph = self.engine.memory.paragraph(page, paragraph_index)
+            if not paragraph.strip():
+                continue
+            for chunk in segment_sentences(paragraph):
+                candidate = {w.lower().strip(".,;:!?\"'") for w in chunk.text.split()}
+                overlap = len(words & candidate)
+                if overlap > best_overlap:
+                    best_overlap = overlap
+                    best = (paragraph_index, chunk.pointer.sentence_index)
 
         # A single shared word is coincidence ("the"), not a match. Two is the
         # cheapest threshold that rejects it without needing the line to be
         # mostly present — an OCR line is often three or four words long.
         if best_overlap < 2:
             return None
-        return best_index
+        return best

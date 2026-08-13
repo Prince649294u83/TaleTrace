@@ -99,6 +99,12 @@ class ReadingEngine:
     # `AiBridge`, typed loosely for the same reason `audio` is: this class holds
     # no import of Groq, and a scenario substitutes a stub that fails on purpose.
     ai: Any = None
+    # `FocusAnalyticsEngine`, and optional in the strongest sense: a session with
+    # no focus engine is a complete session that produces no focus report. It is
+    # notified beside Reading Speed at every call site below and is never asked
+    # anything, so nothing this class does can depend on its answers — which is
+    # what makes "observes only" a property of the wiring rather than a promise.
+    focus: Any = None
     book_id: str | None = None
     # Injected for the same reason every other clock in this system is: a
     # scenario replays an hour of reading in a second, and a wall clock would
@@ -115,6 +121,12 @@ class ReadingEngine:
     # triggered by a gesture, and a gesture has nobody to return a value to.
     _explanation: Any = field(default=None, init=False)
     _review: Any = field(default=None, init=False)
+    # The Reading Focus Analysis of the finished session. Held rather than
+    # returned for the same reason as the review, and separate from
+    # `SessionAnalytics` because the two answer different questions: the
+    # analytics say how fast the reader read, this says which paragraphs cost
+    # them the most.
+    _focus_report: Any = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         self._content = self.memory.content_map(source_version=self.memory.version or 1)
@@ -163,6 +175,12 @@ class ReadingEngine:
 
         return self._review
 
+    @property
+    def focus_report(self) -> Any:
+        """The Reading Focus Analysis, or `None`. A `FocusReport` once finished."""
+
+        return self._focus_report
+
     def current_text(self) -> str:
         """Merge Memory's best text for the paragraph being read."""
 
@@ -205,6 +223,8 @@ class ReadingEngine:
             pointer=self._state.pointer,
             content=self._content,
         )
+        if self.focus is not None:
+            self.focus.session_started(self._state.pointer)
 
         if self.audio is not None:
             await self.audio.start(
@@ -220,6 +240,8 @@ class ReadingEngine:
         self._state = self._state.model_copy(update={"is_paused": True})
         self._record(SessionEvent.SESSION_PAUSED, "")
         self.speed.pause(self.session_id)
+        if self.focus is not None:
+            self.focus.session_paused()
         if self.audio is not None:
             await self.audio.pause(reason=PauseReason.USER)
 
@@ -231,6 +253,8 @@ class ReadingEngine:
         )
         self._record(SessionEvent.SESSION_RESUMED, "")
         self.speed.resume(self.session_id)
+        if self.focus is not None:
+            self.focus.session_resumed()
         if self.audio is not None:
             await self.audio.resume()
 
@@ -267,6 +291,22 @@ class ReadingEngine:
                 playback = self.audio.final_statistics
 
         analytics = self.speed.finish_session(self.session_id, playback=playback)
+
+        focus_report = None
+        if self.focus is not None:
+            self.focus.session_finished()
+            # Judged against the baseline as it stands *now*, not the one the
+            # focus engine was built with. A session that calibrated the reader
+            # part-way through knows more at the end than it did at the start,
+            # and `report()` taking an override is exactly so the paragraphs can
+            # be re-judged without replaying the events.
+            focus_report = self.focus.report(self.speed.baseline_for(self.reader_id))
+            self._focus_report = focus_report
+            self._record(
+                SessionEvent.SESSION_FINISHED,
+                f"focus analysis: {len(focus_report.paragraphs)} paragraph(s), "
+                f"{len(focus_report.needs_attention())} needing attention",
+            )
 
         if self.ai is not None and review:
             # After the analytics, not before: the review is the slowest thing
@@ -448,6 +488,8 @@ class ReadingEngine:
         # Reading Speed infers a page change from the pointer, so a caller only
         # ever has to report a position.
         self.speed.update_pointer(self.session_id, pointer, corrected=corrected)
+        if self.focus is not None:
+            self.focus.pointer_updated(pointer)
 
         if self.audio is not None:
             if pointer.page_index != previous_page:
@@ -510,6 +552,8 @@ class ReadingEngine:
         self._state = self._state.model_copy(update={"is_meaning_mode": True})
         self._record(SessionEvent.MEANING_MODE_ON, target)
         self.speed.meaning_mode(self.session_id, active=True)
+        if self.focus is not None:
+            self.focus.meaning_requested(target)
         if self.audio is not None:
             await self.audio.pause(reason=PauseReason.MEANING_MODE)
 
@@ -545,6 +589,8 @@ class ReadingEngine:
         self._state = self._state.model_copy(update={"is_meaning_mode": False})
         self._record(SessionEvent.MEANING_MODE_OFF, "")
         self.speed.meaning_mode(self.session_id, active=False)
+        if self.focus is not None:
+            self.focus.meaning_mode_off()
         if self.audio is not None:
             await self.audio.resume()
 
@@ -560,6 +606,8 @@ class ReadingEngine:
             self._lookups.append(target)
         self._record(SessionEvent.LOOKUP_COMPLETED, target)
         self.speed.lookup_completed(self.session_id)
+        if self.focus is not None:
+            self.focus.lookup_completed(target)
 
     # ---------------------------------------------------------------- camera
 

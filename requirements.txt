@@ -4,6 +4,34 @@ pydantic-settings>=2.6,<3.0
 python-dotenv>=1.0,<2.0
 sqlalchemy>=2.0,<3.0
 groq>=1.0,<2.0
+requests>=2.31,<3.0
+
+# Vision stack — OCR preprocessing and fingertip detection.
+# These were previously undeclared and only present because the OCRandGESTURE
+# reference venv had installed them, so a clean checkout could import neither
+# `gesture_engine.detector` nor `ocr.pipeline`.
+# opencv-python is capped below 4.12 because 4.12+ requires numpy>=2, and
+# mediapipe 0.10.21 (see the cap below) requires numpy<2. The two caps are one
+# decision: lifting the mediapipe one lifts this one with it.
+opencv-python>=4.8,<4.12
+numpy>=1.24,<2.0
+
+# mediapipe is capped at 0.10.21 deliberately, and the cap is narrower than it
+# looks like it should be. The legacy `mp.solutions` API — which
+# `gesture_engine/detector.py` uses as `mp.solutions.hands.Hands(...)`, following
+# the reference — was removed during the 0.10.x line, not at 1.0: 0.10.21 still
+# ships `mediapipe/python/solutions/hands.py`, 0.10.30 does not, and by 0.10.35
+# the package exports only `Image`, `ImageFormat` and `tasks`.
+#
+# Without this cap the import raises AttributeError, `get_mediapipe_hands()`
+# swallows it into a `None`, and tier 1 of the fingertip detector is silently
+# disabled — leaving only the HSV skin fallback, which needs saturation >= 15 and
+# so cannot fire on a greyscale frame at all. The reference's own venv has 0.10.35
+# and has therefore been running on the fallback alone.
+#
+# Lifting this cap means porting the detector to `mediapipe.tasks` HandLandmarker,
+# which needs a downloaded .task model file — a real change, not a version bump.
+mediapipe>=0.10,<0.10.30
 
 # Audio Engine — speech providers.
 # Both are optional at import time: the audio engine loads without them and a

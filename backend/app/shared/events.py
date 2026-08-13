@@ -22,6 +22,10 @@ class SessionEvent(str, Enum):
     - Audio Engine reports SESSION_FINISHED when playback ends
     - Camera/OCR reports CONTENT_UPDATED when a new frame is merged, and
       CAMERA_ON / CAMERA_OFF when the device starts or stops streaming
+    - The ESP32 buttons report CAMERA_ON / CAMERA_OFF, MEANING_MODE_ON /
+      MEANING_MODE_OFF and READING_UPDATE_REQUESTED. Like Gesture, the hardware
+      publishes and calls nothing: a button that reached into the Audio Engine
+      directly would make the runtime untestable without the device on the desk.
     """
 
     SESSION_STARTED = "SESSION_STARTED"
@@ -47,6 +51,12 @@ class SessionEvent(str, Enum):
     MEANING_MODE_ON = "MEANING_MODE_ON"
     MEANING_MODE_OFF = "MEANING_MODE_OFF"
     LOOKUP_COMPLETED = "LOOKUP_COMPLETED"
+
+    # The reader pressed the momentary button: re-read from where they are now
+    # pointing. Reported by the ESP32 button source, which is why it is separate
+    # from MEANING_REQUESTED — the same gesture selection follows, but the reader
+    # is asking to resume reading at a word rather than to have it explained.
+    READING_UPDATE_REQUESTED = "READING_UPDATE_REQUESTED"
 
     CONTENT_UPDATED = "CONTENT_UPDATED"
 

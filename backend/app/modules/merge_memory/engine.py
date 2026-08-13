@@ -200,6 +200,15 @@ class MergeMemory:
 
         The default is the fragment because that is the older contract and the
         one the tests were written against; the pipeline path opts in.
+
+        `whole_page` chooses replace over append. It does **not** skip
+        reconstruction: what the reconstructor does is repair raw OCR — drop the
+        running header and the page number, close up words broken by a camera
+        nudge, restore characters Vision lost — and a page that arrived whole
+        needs every one of those as much as a fragment does. The reference called
+        it on every frame including the first, which is why its prompt has an
+        `[EMPTY - PAGE START]` case at all. Skipping it here put `hat's`, `ege`
+        and a burned-in camera overlay into the text handed to the reader.
         """
 
         if frame_version is not None and frame_version < self._version:
@@ -215,14 +224,16 @@ class MergeMemory:
             page = Page(page_index=target)
             self._pages[target] = page
 
-        if whole_page or not page.paragraphs:
-            # No join to make: either this frame is the page, or there is nothing
-            # yet to join it to. `reconstruct` is skipped deliberately — it
-            # repairs a *seam* between two texts, and neither case has one.
+        if self._reconstruct is not None:
+            # `page.text` is empty on the first frame of a page, and the
+            # reconstructor is built for that: it reads an empty memory as
+            # "clean this OCR up", which is exactly the job here.
+            held = "" if whole_page else page.text
+            merged = self._reconstruct(held, cleaned)
+            page.paragraphs = _to_paragraphs(merged or cleaned)
+        elif whole_page or not page.paragraphs:
+            # Nothing to merge with, and no reconstructor to ask.
             page.paragraphs = _to_paragraphs(cleaned)
-        elif self._reconstruct is not None:
-            merged = self._reconstruct(page.text, cleaned)
-            page.paragraphs = _to_paragraphs(merged or page.text)
         else:
             page.paragraphs = _to_paragraphs(f"{page.text}{_PARAGRAPH_BREAK}{cleaned}")
 

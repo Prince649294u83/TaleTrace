@@ -5,10 +5,11 @@ Ported from `backend/app/OCRandGESTURE/Gesture/tests/test_ocr_providers.py` and
 integration: the pipeline's four operations, and Merge Memory as the single
 source of truth behind them.
 
-Every test runs through `JsonOcrProvider`, which is not a mock — it is the real
-provider replaying recorded words, so the pipeline under test is the one that
-runs live. Only the engine at the far end differs. That is the property the
-provider port exists to give: `OcrPipeline` cannot tell which one it got.
+Every test runs through `ReplayAdapter`, which is not a mock — it replays
+recorded words through the pipeline that runs live, so only the source at the far
+end differs. That is the property the port exists to give: `OcrPipeline` cannot
+tell which one it got. Replay is not an OCR engine and production cannot select
+it; Google Vision is the only engine in production.
 
 No network and no API key. The Google Vision tests exercise `parse_response`
 against captured payloads, which is where the parsing bugs actually lived.
@@ -28,12 +29,11 @@ from backend.app.modules.ocr.pipeline import (
 )
 from backend.app.modules.ocr.providers import (
     GoogleVisionProvider,
-    JsonOcrProvider,
     OcrProviderError,
-    OcrProviderUnavailable,
     coerce_to_jpeg_bytes,
-    get_provider,
+    get_ocr_engine,
 )
+from backend.app.modules.ocr.replay import ReplayAdapter
 from backend.app.shared.constants import FIRST_PAGE_INDEX
 from backend.app.shared.exceptions import StaleContentError
 
@@ -59,16 +59,63 @@ def recorded(*texts, y=20, start_x=10, line_index=0, paragraph_index=0):
 
 
 def pipeline_over(*pages):
-    """An `OcrPipeline` driven by the JSON provider, with preprocessing off.
+    """An `OcrPipeline` driven by the replay adapter, with preprocessing off.
 
     Preprocessing is disabled because these pages are word lists, not images —
     there is nothing to sharpen, and CLAHE only applies to raw bytes anyway.
     """
 
-    return OcrPipeline(provider=JsonOcrProvider(), preprocess=False)
+    return OcrPipeline(provider=ReplayAdapter(), preprocess=False)
 
 
-class TestJsonProvider:
+def vision_page(*paragraphs):
+    """A Vision DOCUMENT_TEXT_DETECTION response, written as `(text, break)` pairs.
+
+    The real payload nests six levels deep to say "this word, then a space", and
+    written out longhand a four-word test is ninety lines of braces in which the
+    one thing under test is invisible. Each word here is `("Son", "SPACE")`, or
+    `("Son", None)` for the words Vision reports no break after — which is the
+    case the spacing tests exist for.
+
+    Geometry is generated rather than specified: these tests are about spacing,
+    and a box that only has to exist should not be written out by hand.
+    """
+
+    response_paragraphs = []
+    for paragraph in paragraphs:
+        words = []
+        for index, (text, break_type) in enumerate(paragraph):
+            symbols = [{"text": character} for character in text]
+            if break_type is not None:
+                symbols[-1]["property"] = {"detectedBreak": {"type": break_type}}
+            x = 10 + index * 50
+            words.append(
+                {
+                    "symbols": symbols,
+                    "boundingBox": {
+                        "vertices": [
+                            {"x": x, "y": 20},
+                            {"x": x + 40, "y": 20},
+                            {"x": x + 40, "y": 40},
+                            {"x": x, "y": 40},
+                        ]
+                    },
+                }
+            )
+        response_paragraphs.append({"words": words})
+
+    return {
+        "responses": [
+            {
+                "fullTextAnnotation": {
+                    "pages": [{"blocks": [{"paragraphs": response_paragraphs}]}]
+                }
+            }
+        ]
+    }
+
+
+class TestReplayAdapter:
     def test_loads_words_from_a_file(self, tmp_path):
         path = tmp_path / "page.json"
         path.write_text(
@@ -81,7 +128,7 @@ class TestJsonProvider:
             encoding="utf-8",
         )
 
-        words = JsonOcrProvider().extract(str(path))
+        words = ReplayAdapter().extract(str(path))
 
         assert [w.text for w in words] == ["Hello", "World"]
         assert words[0].bbox == (10, 20, 60, 40)
@@ -106,19 +153,19 @@ class TestJsonProvider:
 
         # A recorded page with one bad row should still replay. Raising here
         # would make a single malformed entry unreplayable.
-        assert [w.text for w in JsonOcrProvider().extract(str(path))] == ["Good"]
+        assert [w.text for w in ReplayAdapter().extract(str(path))] == ["Good"]
 
     def test_a_missing_file_is_a_provider_error(self):
         # Not FileNotFoundError: the caller catches OcrProviderError to decide
         # whether to retry, and a provider that raises OS exceptions makes every
         # call site handle two families.
         with pytest.raises(OcrProviderError, match="not found"):
-            JsonOcrProvider().extract("no_such_page_xyz.json")
+            ReplayAdapter().extract("no_such_page_xyz.json")
 
     def test_an_empty_page_is_empty_not_an_error(self, tmp_path):
         path = tmp_path / "page.json"
         path.write_text("[]", encoding="utf-8")
-        assert JsonOcrProvider().extract(str(path)) == []
+        assert ReplayAdapter().extract(str(path)) == []
 
     def test_optional_indices_survive_the_round_trip(self, tmp_path):
         path = tmp_path / "page.json"
@@ -137,45 +184,111 @@ class TestJsonProvider:
             encoding="utf-8",
         )
 
-        word = JsonOcrProvider().extract(str(path))[0]
+        word = ReplayAdapter().extract(str(path))[0]
         assert (word.word_index, word.line_index, word.paragraph_index) == (1, 3, 2)
 
     def test_a_word_list_can_be_passed_directly(self):
         # Skips the file entirely, which is how a scenario builds a page inline.
-        words = JsonOcrProvider().extract(recorded("inline", "page"))
+        words = ReplayAdapter().extract(recorded("inline", "page"))
         assert [w.text for w in words] == ["inline", "page"]
 
 
-class TestProviderPort:
-    def test_every_provider_satisfies_the_port(self):
-        # Structural, not inheritance: a provider satisfies the contract by
-        # having the methods, so adding an engine never means editing a base
-        # class the other two share.
-        for provider in (GoogleVisionProvider(api_key="x"), JsonOcrProvider()):
-            assert isinstance(provider, OcrProvider)
+class TestProductionEngineIsVisionOnly:
+    """Production has one OCR engine and no way to pick another."""
 
-    def test_providers_disagree_about_what_they_accept(self):
-        # The reason `accepts` is on the port at all. Google Vision can be handed
-        # a URL; the JSON provider cannot read one.
-        assert GoogleVisionProvider(api_key="x").accepts(b"jpeg-bytes")
-        assert not JsonOcrProvider().accepts(b"jpeg-bytes")
+    def test_the_production_engine_is_google_vision(self):
+        assert get_ocr_engine().provider_name == "google_vision"
 
-    def test_get_provider_resolves_by_name(self):
-        assert get_provider("json").provider_name == "json"
+    def test_no_environment_variable_can_change_the_engine(self, monkeypatch):
+        # The whole point of dropping the registry: a stray or misspelt variable
+        # must not be able to change which engine reads the page.
+        monkeypatch.setenv("OCR_PROVIDER", "paddle")
+        assert get_ocr_engine().provider_name == "google_vision"
 
-    def test_get_provider_reads_the_environment(self, monkeypatch):
-        monkeypatch.setenv("OCR_PROVIDER", "json")
-        assert get_provider().provider_name == "json"
+    def test_the_replay_adapter_is_not_reachable_from_production(self):
+        # Replay must be constructed explicitly by a test or demo. It keeps a
+        # `provider_name` because the port requires one, but the guarantee is
+        # that no lookup maps a string to it: `get_ocr_engine` takes no name, and
+        # there is no registry left to consult.
+        import inspect
 
-    def test_an_unknown_provider_names_the_alternatives(self):
-        with pytest.raises(OcrProviderUnavailable, match="Available:"):
-            get_provider("tesseract")
+        from backend.app.modules.ocr import providers
 
-    def test_resolving_a_provider_does_not_check_credentials(self, monkeypatch):
+        # No registry to consult and no name to pass: the only way to reach
+        # replay is to import and construct it, which production never does.
+        assert not [name for name in dir(providers) if "PROVIDERS" in name]
+        assert not hasattr(providers, "ReplayAdapter")
+        assert list(inspect.signature(get_ocr_engine).parameters) == ["kwargs"]
+
+    def test_resolving_the_engine_does_not_check_credentials(self, monkeypatch):
         monkeypatch.delenv("GOOGLE_VISION_API_KEY", raising=False)
         # Constructing the runtime must not require a network call or a key;
         # the failure belongs at the first frame, not at startup.
-        assert get_provider("google_vision").provider_name == "google_vision"
+        assert get_ocr_engine().provider_name == "google_vision"
+
+    def test_both_sources_satisfy_the_port(self):
+        # Structural, not inheritance: the pipeline accepts anything with the
+        # methods, which is what lets replay stand in for Vision without the
+        # pipeline knowing.
+        for source in (GoogleVisionProvider(api_key="x"), ReplayAdapter()):
+            assert isinstance(source, OcrProvider)
+
+    def test_the_sources_disagree_about_what_they_accept(self):
+        # The reason `accepts` is on the port at all. Vision can be handed raw
+        # JPEG bytes; replay reads recorded responses, not images.
+        assert GoogleVisionProvider(api_key="x").accepts(b"jpeg-bytes")
+        assert not ReplayAdapter().accepts(b"jpeg-bytes")
+
+    def test_replay_uses_the_production_parser(self):
+        # Not a second parser: a recorded Vision response replays through
+        # `GoogleVisionProvider.parse_response`, so replayed words are parsed by
+        # the same code production uses.
+        response = {
+            "responses": [
+                {
+                    "fullTextAnnotation": {
+                        "pages": [
+                            {
+                                "blocks": [
+                                    {
+                                        "paragraphs": [
+                                            {
+                                                "words": [
+                                                    {
+                                                        "symbols": [
+                                                            {"text": "R"},
+                                                            {"text": "e"},
+                                                            {"text": "a"},
+                                                            {"text": "l"},
+                                                        ],
+                                                        "boundingBox": {
+                                                            "vertices": [
+                                                                {"x": 10, "y": 20},
+                                                                {"x": 60, "y": 20},
+                                                                {"x": 60, "y": 40},
+                                                                {"x": 10, "y": 40},
+                                                            ]
+                                                        },
+                                                        "confidence": 0.99,
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+        replayed = ReplayAdapter().extract(response)
+        directly = GoogleVisionProvider.parse_response(response)
+
+        assert [w.text for w in replayed] == ["Real"]
+        assert [(w.text, w.bbox, w.paragraph_index) for w in replayed] == [
+            (w.text, w.bbox, w.paragraph_index) for w in directly
+        ]
 
     def test_jpeg_bytes_pass_through_unre_encoded(self):
         payload = b"\xff\xd8\xff\xe0 pretend jpeg"
@@ -363,6 +476,115 @@ class TestGoogleVisionParsing:
         assert GoogleVisionProvider.parse_response(response)[0].confidence == pytest.approx(0.7)
 
 
+class TestSpacingFollowsVision:
+    """Page text must match what Vision's own flat `text` would have said.
+
+    The reference implementation read `fullTextAnnotation.text` and got spacing
+    for free. That string cannot be used here — it carries no paragraph structure
+    at all — so text is rebuilt from the word hierarchy, and these tests pin the
+    one thing the flat string did better.
+
+    Verified against live Vision on three real page photographs: word-for-word
+    identical to the reference's flat text on all three, from the same response.
+    An earlier version guessed spacing from the character class and scored 90% on
+    a dialogue-heavy page, because `"` is the same character opening and closing.
+    """
+
+    def render(self, response) -> str:
+        """The page as the runtime would hold it, through the production parser.
+
+        Via the pipeline rather than by calling the renderer directly, because a
+        recorded Vision response is exactly what `ReplayAdapter` hands to
+        `GoogleVisionProvider.parse_response` — the same parser production uses.
+        Asserting on the renderer alone would leave the plumbing between them
+        untested, and that plumbing is where the `space_after` field travels.
+        """
+
+        pipeline = pipeline_over()
+        pipeline.update_memory(response)
+        return pipeline.text
+
+    def test_a_break_type_becomes_the_space_after_flag(self):
+        words = GoogleVisionProvider.parse_response(
+            vision_page([("Hi", "SPACE"), ("there", None)])
+        )
+
+        assert words[0].space_after is True
+        # No `detectedBreak` at all is Vision saying the next word hugs this one.
+        assert words[1].space_after is False
+
+    @pytest.mark.parametrize("break_type", ["SPACE", "SURE_SPACE", "EOL_SURE_SPACE", "LINE_BREAK"])
+    def test_every_break_that_means_a_space_is_honoured(self, break_type):
+        assert self.render(vision_page([("one", break_type), ("two", None)])) == "one two"
+
+    @pytest.mark.parametrize("break_type", [None, "HYPHEN"])
+    def test_breaks_that_close_a_word_up_produce_no_space(self, break_type):
+        # HYPHEN is a word split across a printed line end; absent is punctuation
+        # hugging its neighbour. Neither may leave a space behind.
+        assert self.render(vision_page([("one", break_type), ("two", None)])) == "onetwo"
+
+    def test_quotes_close_around_the_words_they_enclose(self):
+        # The case that character classes cannot decide: the same `"` opens and
+        # closes, so the direction it binds is only knowable from the break.
+        rendered = self.render(
+            vision_page(
+                [
+                    ('"', None),
+                    ("Son", None),
+                    ("!", None),
+                    ('"', "SPACE"),
+                    ("said", "SPACE"),
+                    ("Fels", None),
+                ]
+            )
+        )
+
+        assert rendered == '"Son!" said Fels'
+
+    def test_an_ellipsis_binds_on_both_sides(self):
+        rendered = self.render(
+            vision_page(
+                [("Um", None), ("...", None), ("er", None), ("...", "SPACE"), ("yes", None)]
+            )
+        )
+
+        assert rendered == "Um...er... yes"
+
+    def test_a_word_hyphenated_across_a_line_end_closes_up(self):
+        rendered = self.render(
+            vision_page([("advance", "HYPHEN"), ("ments", "SPACE"), ("are", None)])
+        )
+
+        assert rendered == "advancements are"
+
+    def test_paragraphs_survive_the_spacing_rules(self):
+        rendered = self.render(
+            vision_page(
+                [("First", "SPACE"), ("paragraph", None)],
+                [("Second", "SPACE"), ("one", None)],
+            )
+        )
+
+        # Merge Memory splits on a blank line to rebuild the page's shape, so the
+        # paragraph break has to survive whatever the spacing rules did inside it.
+        assert rendered == "First paragraph\n\nSecond one"
+
+    def test_a_source_that_reports_no_breaks_still_spaces_its_words(self):
+        # The replay adapter's fixture path builds words by hand and knows nothing
+        # about breaks, so `space_after` defaults to True. Character classes remain
+        # as the fallback there: they only ever join more, never less.
+        pipeline = pipeline_over()
+        pipeline.update_memory(recorded("Two", "topics", "impact", "everyone", "here"))
+
+        assert pipeline.text == "Two topics impact everyone here"
+
+    def test_the_fallback_still_reattaches_punctuation_vision_split_out(self):
+        pipeline = pipeline_over()
+        pipeline.update_memory(recorded("realize", ",", "greatly", "under", "-", "rated"))
+
+        assert pipeline.text == "realize, greatly under-rated"
+
+
 class TestWordConversion:
     def test_a_word_converts_to_the_domain_contract(self):
         word = RecognizedWord.from_bbox("word", (10, 20, 60, 50), confidence=0.9)
@@ -399,7 +621,7 @@ class TestPipeline:
 
         assert result.accepted
         assert result.version == 1
-        assert result.provider == "json"
+        assert result.provider == "replay"
         assert result.text == "The quick brown fox"
 
     def test_a_second_frame_merges_rather_than_replaces(self):
@@ -441,7 +663,7 @@ class TestPipeline:
         assert "timed out" in result.reason
 
     def test_a_source_the_provider_cannot_read_is_rejected(self):
-        result = OcrPipeline(provider=JsonOcrProvider(), preprocess=False).update_memory(b"jpeg")
+        result = OcrPipeline(provider=ReplayAdapter(), preprocess=False).update_memory(b"jpeg")
         assert not result.accepted
         assert "cannot read" in result.reason
 
@@ -595,15 +817,64 @@ class TestMergeMemory:
         # Still two frames and two versions: the page was superseded, not ignored.
         assert memory.version == 2
 
-    def test_a_whole_page_does_not_go_through_the_reconstructor(self):
-        """There is no seam to repair when the incoming text is the entire page."""
+    def test_a_whole_page_still_goes_through_the_reconstructor(self):
+        """`whole_page` chooses replace over append. It does not skip cleaning.
 
-        memory = MergeMemory(reconstruct=lambda held, incoming: f"{held} {incoming} [joined]")
+        What the reconstructor does is repair raw OCR — drop the running header
+        and the page number, close up a word the camera broke, restore characters
+        Vision lost. A page that arrived whole needs all of that as much as a
+        fragment does, and the reference ran it on every frame for exactly that
+        reason. What `whole_page` changes is what it is merged *against*: nothing,
+        rather than the page already held, because OCR has already accumulated it.
+        """
+
+        memory = MergeMemory(reconstruct=lambda held, incoming: f"{held}{incoming} [cleaned]")
         memory.apply_frame("A whole page.", whole_page=True)
         memory.apply_frame("A whole page, read better.", whole_page=True)
 
-        assert memory.page_text(FIRST_PAGE_INDEX) == "A whole page, read better."
-        assert "[joined]" not in memory.page_text(FIRST_PAGE_INDEX)
+        # Replaced, not accumulated — and cleaned on the way through.
+        assert memory.page_text(FIRST_PAGE_INDEX) == "A whole page, read better. [cleaned]"
+
+    def test_a_whole_page_is_reconstructed_against_nothing(self):
+        """Not against the page held, which OCR has already merged this frame into.
+
+        Passing the held page here would ask the model to merge an accumulated
+        page with itself, and it would either duplicate the overlap or drop it.
+        """
+
+        seen: list[tuple[str, str]] = []
+
+        def record(held: str, incoming: str) -> str:
+            seen.append((held, incoming))
+            return incoming
+
+        memory = MergeMemory(reconstruct=record)
+        memory.apply_frame("First reading of the page.", whole_page=True)
+        memory.apply_frame("Second, better reading of the page.", whole_page=True)
+
+        assert seen == [
+            ("", "First reading of the page."),
+            ("", "Second, better reading of the page."),
+        ]
+
+    def test_a_fragment_is_reconstructed_against_the_page_held(self):
+        """The seam case, unchanged: a fragment is joined to what came before."""
+
+        seen: list[tuple[str, str]] = []
+
+        def record(held: str, incoming: str) -> str:
+            seen.append((held, incoming))
+            return f"{held} {incoming}".strip()
+
+        memory = MergeMemory(reconstruct=record)
+        memory.apply_frame("A sentence broken")
+        memory.apply_frame("across two frames.")
+
+        assert seen == [
+            ("", "A sentence broken"),
+            ("A sentence broken", "across two frames."),
+        ]
+        assert memory.page_text(FIRST_PAGE_INDEX) == "A sentence broken across two frames."
 
     def test_beginning_a_page_commits_the_one_being_left(self):
         memory = MergeMemory()

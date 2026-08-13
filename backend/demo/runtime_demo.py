@@ -33,7 +33,6 @@ actually answers.
 import argparse
 import asyncio
 import logging
-import os
 import sys
 import time
 from pathlib import Path
@@ -47,10 +46,11 @@ from backend.app.modules.audio_engine.speech_provider import (
     NullAudioSink,
 )
 from backend.app.modules.gesture_engine.selection_models import FingerPoint
-from backend.app.modules.ocr.providers import JsonOcrProvider
+from backend.app.modules.ocr.replay import ReplayAdapter
 from backend.app.modules.reading_engine.ai_bridge import AiBridge
 from backend.app.modules.reading_engine.runtime import ReadingRuntime
 from backend.app.modules.reading_speed.service import ReadingSpeedService
+from backend.app.shared.groq_keys import ai_engine_key
 from backend.demo import console
 from backend.demo.dashboard import Dashboard
 
@@ -84,7 +84,7 @@ def recorded_page(text: str, *, confidence: float = 0.95) -> list[dict]:
     """Word boxes for `text`, as a camera frame would have produced them.
 
     This is the whole of the hardware fake. Everything downstream receives
-    exactly what it would receive from a real frame, because `JsonOcrProvider`
+    exactly what it would receive from a real frame, because `ReplayAdapter`
     replays these through the same pipeline a Vision response goes through.
     """
 
@@ -676,8 +676,8 @@ async def _run(args: argparse.Namespace) -> int:
     console.field("Script", "p1 gesture | p2 lookup+correction | p3 pause | p4 camera loss")
     print()
 
-    if args.live_ai and not (os.environ.get("GROQ_API_KEY") or "").strip():
-        console.field("Warning", "--live-ai given but GROQ_API_KEY is not set")
+    if args.live_ai and not ai_engine_key():
+        console.field("Warning", "--live-ai given but GROQ_API_KEY_1 is not set")
         print()
 
     speed = ReadingSpeedService(clock=clock)
@@ -696,7 +696,7 @@ async def _run(args: argparse.Namespace) -> int:
     runtime = ReadingRuntime.build(
         session_id=SESSION_ID,
         reader_id=READER_ID,
-        ocr_provider=JsonOcrProvider(),
+        ocr_provider=ReplayAdapter(),
         audio=audio,
         ai=build_ai(live=args.live_ai),
         book_id="book-lighthouse",

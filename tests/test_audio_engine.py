@@ -560,6 +560,82 @@ class TestPlaybackEngine:
         assert "First sentence." not in newly_spoken
 
     @pytest.mark.asyncio
+    async def test_seek_after_page_ran_dry_restarts_playback(self):
+        """Regression: a gesture on a finished page must not kill narration.
+
+        Found on a real photograph. OCR split the page so that the paragraph the
+        session opened on was a single word — routine, since the reader's hand
+        cuts a line down to a fragment. Narration spoke it, the queue emptied and
+        the engine reached FINISHED. The reader then pointed at a word further
+        down the *same* page, which the Reading Engine routes to `seek()`.
+
+        The queue refilled and nothing ever spoke it: the loop had already
+        returned, and only `start()` and `resume()` spawn a new one. Narration was
+        dead until a page turn. FINISHED means "nothing left to speak", not "the
+        reader has left this page".
+        """
+        provider = FakeSpeechProvider()
+        engine = build_engine(provider=provider)
+
+        await engine.start(pointer=ReadingPointer(), text="for", profile=FAST)
+        await engine.wait_for_idle()
+        assert engine.get_status().state is PlaybackState.FINISHED
+
+        await engine.seek(
+            pointer=ReadingPointer(paragraph_index=20),
+            text="Two topics impact everyone. They are health and money.",
+        )
+        await engine.wait_for_idle()
+
+        assert provider.spoken == [
+            "for",
+            "Two topics impact everyone.",
+            "They are health and money.",
+        ]
+        assert engine.get_status().queued_sentences == 0
+
+    @pytest.mark.asyncio
+    async def test_seek_after_finish_without_new_text_stays_finished(self):
+        """Reviving requires sentences. An empty seek must not spin a loop."""
+        engine = build_engine()
+        await engine.start(pointer=ReadingPointer(), text="Only one.", profile=FAST)
+        await engine.wait_for_idle()
+
+        await engine.seek(pointer=ReadingPointer(sentence_index=3))
+        assert engine.get_status().state is PlaybackState.FINISHED
+
+    @pytest.mark.asyncio
+    async def test_seek_does_not_resume_a_paused_reader(self):
+        """Only FINISHED revives. A deliberate pause is the reader's to undo."""
+        engine = build_engine(auto_advance=False)
+        await engine.start(pointer=ReadingPointer(), text=THREE_SENTENCES, profile=FAST)
+        await engine.wait_for_idle()
+        await engine.pause(reason=PauseReason.MEANING_MODE)
+
+        await engine.seek(
+            pointer=ReadingPointer(paragraph_index=2), text="A wholly new paragraph."
+        )
+
+        status = engine.get_status()
+        assert status.state is PlaybackState.PAUSED
+        assert status.pause_reason is PauseReason.MEANING_MODE
+
+    @pytest.mark.asyncio
+    async def test_revived_playback_keeps_the_pages_reading_time(self):
+        """The revive goes through READY, which zeroes the machine's clock."""
+        engine = build_engine()
+        await engine.start(pointer=ReadingPointer(), text="for", profile=FAST)
+        await engine.wait_for_idle()
+        banked = engine.get_status().statistics.reading_time_ms
+
+        await engine.seek(
+            pointer=ReadingPointer(paragraph_index=20), text="Two topics impact everyone."
+        )
+        await engine.wait_for_idle()
+
+        assert engine.get_status().statistics.reading_time_ms >= banked
+
+    @pytest.mark.asyncio
     async def test_refresh_queue_does_not_restart_current_sentence(self):
         """Merge updates must never interrupt what is being spoken."""
         engine = build_engine(auto_advance=False)

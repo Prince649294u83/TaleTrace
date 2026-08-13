@@ -22,6 +22,7 @@ from backend.app.modules.ai_engine.models import (
     ImageType,
 )
 from backend.app.modules.ai_engine.prompts import PromptBuilder
+from backend.app.shared.groq_keys import ai_engine_key
 
 load_dotenv()
 
@@ -34,12 +35,30 @@ _prompts = PromptBuilder()
 
 
 def _get_client() -> Groq:
-    """Create the Groq client on first use so the app can boot without a key."""
+    """Create the Groq client on first use so the app can boot without a key.
+
+    `GROQ_API_KEY_1`, never the Merge Engine's key. This client belongs to the AI
+    Engine alone — the Merge Engine builds its own in
+    `merge_memory/reconstruction.py`, and neither holds a reference to the other's.
+    A reader asking what a word means must not be rate-limited by the camera loop.
+    """
 
     global _client
     if _client is None:
-        _client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        _client = Groq(api_key=ai_engine_key())
     return _client
+
+
+def reset_client() -> None:
+    """Drop the cached client so the next call re-reads the key.
+
+    Exists for the harnesses: `.env` is loaded after import in several entry
+    points, and a client built from an empty environment would otherwise be
+    cached for the life of the process.
+    """
+
+    global _client
+    _client = None
 
 
 def _safe_json_completion(system_prompt: str, user_content: str, max_retries: int = 2) -> dict:
