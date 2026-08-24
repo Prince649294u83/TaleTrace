@@ -175,6 +175,53 @@ class TestBaselineStability:
         assert adapted.baseline_wpm == 120.0
         assert adapted.is_evidence
 
+    def test_repeated_sessions_converge_instead_of_drifting(self):
+        """The long-session property: many adaptations settle, they do not wander.
+
+        Single-step weighting is checked above, which says nothing about what
+        forty sessions do. An EWMA weight above 1.0 — or a sign slip — still
+        passes the one-step test while diverging here, and the symptom would be
+        a reader whose baseline slowly walks away from their actual pace.
+        """
+
+        baseline = measured(200.0)
+        history = []
+        for _ in range(40):
+            baseline = calibration.adapt(
+                baseline, session_wpm=250.0, reading_ms=600_000, words_read=2_000
+            )
+            history.append(baseline.baseline_wpm)
+
+        # Monotone towards the observed pace, never past it, and settled by the end.
+        assert history == sorted(history)
+        assert all(value <= 250.0 for value in history)
+        assert history[-1] == pytest.approx(250.0, abs=0.5)
+        assert history[-1] == history[-2], "a converged baseline must stop moving"
+
+    def test_a_reader_with_two_paces_settles_in_between_rather_than_swinging(self):
+        """Alternating fast and slow sessions must not amplify.
+
+        The failure this rules out is a baseline that swings wider each time,
+        which would make every prediction alternately far too fast and far too
+        slow — worse than a baseline that is simply a bit wrong.
+        """
+
+        baseline = measured(200.0)
+        history = []
+        for index in range(20):
+            baseline = calibration.adapt(
+                baseline,
+                session_wpm=300.0 if index % 2 == 0 else 150.0,
+                reading_ms=600_000,
+                words_read=2_000,
+            )
+            history.append(baseline.baseline_wpm)
+
+        early_swing = max(history[:4]) - min(history[:4])
+        late_swing = max(history[-4:]) - min(history[-4:])
+        assert late_swing <= early_swing + 1.0, "the swing must not grow"
+        assert 150.0 < min(history[-4:]) and max(history[-4:]) < 300.0
+
     def test_suggest_does_not_apply(self):
         original = measured(200.0)
         suggestion = calibration.suggest_baseline(

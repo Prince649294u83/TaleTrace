@@ -309,6 +309,22 @@ def assess(report: StressReport, loop: Any, analytics: Any, args: argparse.Names
             max(queued) <= args.max_queue,
             f"peaked at {max(queued)} sentences (allowed {args.max_queue})",
         )
+        # A queue holding sentences while playback has finished is a stall: the
+        # loop has returned, so nothing will ever speak them and the reader hears
+        # the paragraph stop partway. Checked at every sample rather than at the
+        # end, because the end is the one place it legitimately looks like this —
+        # `finish()` drains and closes, so a stall there is indistinguishable
+        # from a clean shutdown.
+        stalled = [
+            s for s in samples[:-1] if s.audio_queued > 0 and s.audio_state == "finished"
+        ]
+        report.check(
+            "playback never sits finished with sentences still queued",
+            not stalled,
+            f"stalled at tick(s) {[s.tick for s in stalled][:5]} with "
+            f"{stalled[0].audio_queued if stalled else 0} sentence(s) unspoken",
+        )
+
         # A refresh rejected as stale is correct behaviour on an out-of-order
         # frame and a defect if it is most of them, so the count is reported
         # rather than judged — the harness cannot tell which without the frames.

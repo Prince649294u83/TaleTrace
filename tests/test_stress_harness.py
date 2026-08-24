@@ -205,6 +205,36 @@ class TestStressInvariants:
             _verdict(report, "audio queue is bounded")
         assert any("untested" in note for note in report.notes)
 
+    def test_playback_stalled_with_sentences_queued_fails(self):
+        """The defect this harness actually found: the playback loop had returned
+        while sentences were still queued, so nothing would ever speak them."""
+
+        report = StressReport(
+            samples=_samples(
+                audio_queued=[0, 0, 1, 1, 1, 1, 1, 1, 1, 0],
+                audio_state=["playing"] * 2 + ["finished"] * 8,
+            )
+        )
+
+        assess(report, _Loop(), None, _args())
+
+        assert not _verdict(report, "never sits finished with sentences still queued")
+
+    def test_a_drained_queue_at_shutdown_is_not_read_as_a_stall(self):
+        """`finish()` legitimately ends finished-and-empty, and the final sample is
+        taken after it — flagging that would fail every clean session."""
+
+        report = StressReport(
+            samples=_samples(
+                audio_queued=[0] * 9 + [3],
+                audio_state=["playing"] * 9 + ["finished"],
+            )
+        )
+
+        assess(report, _Loop(), None, _args())
+
+        assert _verdict(report, "never sits finished with sentences still queued")
+
     def test_a_heap_growing_faster_late_than_early_fails(self):
         heap = [100.0, 110.0, 118.0, 124.0, 128.0, 300.0, 600.0, 1000.0, 1500.0, 2100.0]
         report = StressReport(samples=_samples(heap_kb=heap))

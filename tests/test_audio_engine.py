@@ -1380,3 +1380,47 @@ class TestRoutes:
         assert "statistics" in data
         assert data["queue_version"] >= 1
         assert data["session_id"] == "default"
+
+
+class TestRefreshAfterQueueRanDry:
+    """A refresh that arrives after the queue emptied must still be spoken.
+
+    Found by `scripts/stress_session.py`. `refresh_queue` filled the queue but
+    only the *seek* path knew how to restart a finished playback loop, so
+    sentences OCR delivered late sat queued with nothing to speak them: the
+    reader heard the paragraph stop partway because OCR was still improving it.
+    Silent — no error, no state anyone would look at twice.
+    """
+
+    @pytest.mark.asyncio
+    async def test_late_text_is_spoken_rather_than_stranded(self):
+        engine = build_engine()
+        await engine.start(pointer=ReadingPointer(page_index=1), text="One two. Three four.")
+        await engine.wait_for_idle()
+        assert engine.get_status().state is PlaybackState.FINISHED
+        spoken_before = engine.get_status().statistics.sentences_spoken
+
+        # OCR reveals that the paragraph was longer than the first frame showed.
+        applied = await engine.refresh_queue(
+            text="One two. Three four. Five six. Seven eight.", source_version=99
+        )
+        await engine.wait_for_idle()
+
+        status = engine.get_status()
+        assert applied
+        assert status.statistics.sentences_spoken > spoken_before
+        assert status.queued_sentences == 0, "sentences left queued will never be spoken"
+
+    @pytest.mark.asyncio
+    async def test_a_paused_reader_is_not_restarted_by_a_refresh(self):
+        """The other half of the fix. Reviving on PAUSED would resume narration
+        under a reader who put the book down — their pause, their resume."""
+
+        engine = build_engine()
+        await engine.start(pointer=ReadingPointer(page_index=1), text=THREE_SENTENCES)
+        await engine.pause()
+
+        await engine.refresh_queue(text=THREE_SENTENCES + " And another.", source_version=99)
+        await asyncio.sleep(0.05)
+
+        assert engine.get_status().state is PlaybackState.PAUSED

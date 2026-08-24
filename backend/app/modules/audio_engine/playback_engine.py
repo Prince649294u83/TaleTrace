@@ -356,20 +356,8 @@ class PlaybackEngine:
 
             # Nothing was in flight. If the page had run dry and this seek
             # brought sentences with it, the loop has already returned and has to
-            # be restarted — see the note in the docstring. PAUSED is left alone:
-            # the reader stopped on purpose, and `resume()` is what undoes that.
-            revive = self._machine.state is PlaybackState.FINISHED and bool(self._queue)
-            if revive:
-                # READY zeroes the machine's clock, so bank the page's reading
-                # time first — the same reason `start()` carries it on a page turn.
-                self._stats.carried_reading_ms += self._machine.elapsed_reading_ms
-                self._machine.transition_to(PlaybackState.READY)
-                self._machine.transition_to(PlaybackState.PLAYING)
-                self._log(
-                    "playback_revived",
-                    pointer=pointer.sentence_order_key(),
-                    sentences=self._queue.size(),
-                )
+            # be restarted — see the note in the docstring.
+            revive = self._revive_if_dry(pointer)
 
         if revive:
             self._spawn_loop()
@@ -435,7 +423,11 @@ class PlaybackEngine:
                 queue_version=f"{before} -> {self._queue.version}",
                 source_version=source_version,
             )
-            return True
+            revive = self._revive_if_dry(anchor)
+
+        if revive:
+            self._spawn_loop()
+        return True
 
     def set_profile(self, profile: AudioProfile) -> None:
         """Swap the delivery profile. Takes effect on the next sentence."""
@@ -467,6 +459,39 @@ class PlaybackEngine:
         await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
 
     # ---------- playback loop ----------
+
+    def _revive_if_dry(self, pointer: ReadingPointer) -> bool:
+        """Bring the machine back to PLAYING if it ran dry and has work again.
+
+        Returns whether the caller must `_spawn_loop()` — the transition happens
+        under the caller's lock, the spawn deliberately outside it.
+
+        Shared by the seek path and `refresh_queue` because both can hand a
+        finished engine new sentences, and only the seek path used to notice. A
+        refresh that arrives after the queue ran dry leaves its sentences queued
+        with no loop to speak them: the reader hears the paragraph stop partway
+        because OCR was still improving it, which is not the reader's doing and
+        so is not theirs to undo.
+
+        PAUSED is left alone. The reader stopped on purpose and `resume()` is
+        what undoes that — reviving here would restart narration under someone
+        who put the book down.
+        """
+
+        if self._machine.state is not PlaybackState.FINISHED or not self._queue:
+            return False
+
+        # READY zeroes the machine's clock, so bank the page's reading time
+        # first — the same reason `start()` carries it on a page turn.
+        self._stats.carried_reading_ms += self._machine.elapsed_reading_ms
+        self._machine.transition_to(PlaybackState.READY)
+        self._machine.transition_to(PlaybackState.PLAYING)
+        self._log(
+            "playback_revived",
+            pointer=pointer.sentence_order_key(),
+            sentences=self._queue.size(),
+        )
+        return True
 
     def _spawn_loop(self) -> None:
         if self._task is None or self._task.done():

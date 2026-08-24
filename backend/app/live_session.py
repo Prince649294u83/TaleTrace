@@ -21,6 +21,19 @@ the only way to find out whether the rig, the key and the network agree.
 --check exists because "the session produced no text" has four causes that look
 identical from the outside — no camera, no key, no buttons, no book in frame —
 and finding out which one by starting a session and waiting is the slow way.
+
+Each device is detected on its own
+----------------------------------
+The camera and the buttons arrive, fail and get rewired independently, so they
+are probed independently and substituted independently. A reachable camera with
+unreachable buttons is the common half-built state, and it is the dangerous one:
+the session runs, frames are read, and nothing can ever fire a reading update or
+Meaning Mode — a blind session that looks like a working one. So the buttons fall
+back to a scheduled rehearsal and the substitution is printed, never silent.
+
+The camera has no fallback here on purpose. A live session with a virtual camera
+is a simulation, `simulated_session` already is one, and quietly replaying JPEGs
+under the banner "live session" is how a hardware bug survives a green test.
 """
 
 from __future__ import annotations
@@ -33,6 +46,8 @@ import sys
 
 from backend.app.core.environment import load_environment
 from backend.app.modules.image_receiver import Esp32Buttons, Esp32Camera
+from backend.app.modules.image_receiver.protocols import ButtonSource, CameraSource
+from backend.app.modules.image_receiver.virtual_buttons import ScriptedButtons
 from backend.app.modules.merge_memory.reconstruction import GroqReconstructor
 from backend.app.modules.reading_engine.device_loop import DeviceLoop
 from backend.app.modules.reading_engine.runtime import ReadingRuntime
@@ -46,6 +61,106 @@ logger = logging.getLogger(__name__)
 
 SESSION_ID = "live-session"
 READER_ID = "live-reader"
+
+# How long the rehearsal waits between rounds of presses when the buttons are
+# missing, and how long an open-ended session is assumed to run for scheduling
+# purposes. Both are knobs rather than constants of the universe: a slower reader
+# wants a longer cycle, and a rig on a bench wants a shorter one.
+_REHEARSAL_CYCLE_SECONDS = 30.0
+_REHEARSAL_HORIZON_SECONDS = 1800.0
+
+
+def _camera_live(camera: Esp32Camera) -> bool:
+    """Whether a frame can actually be fetched, not merely whether a URL is set.
+
+    A URL pointing at a device which is powered off is the most common failure and
+    it looks exactly like a correct configuration until a frame is asked for.
+    """
+
+    return camera.configured and camera.frame() is not None
+
+
+def _buttons_live(buttons: Esp32Buttons) -> bool:
+    """Whether the button endpoint answers. Same reasoning as `_camera_live`."""
+
+    return buttons.configured and buttons.read().reachable
+
+
+def rehearsal_script(
+    seconds: float | None = None,
+    *,
+    cycle_seconds: float = _REHEARSAL_CYCLE_SECONDS,
+) -> tuple[tuple[float, str], ...]:
+    """A repeating reader's rhythm, long enough to cover the whole run.
+
+    One-shot scripts are wrong here. `simulated_session`'s fires four presses in
+    the first twenty seconds because a simulated session *is* those twenty
+    seconds; a live camera test runs for as long as someone is holding a book, and
+    a schedule that goes quiet after 20s would leave the remaining ten minutes
+    testing nothing but frame capture.
+
+    Each cycle: point at a word, hold Meaning Mode long enough for the AI call to
+    land and interrupt narration, release.
+    """
+
+    horizon = seconds if seconds and seconds > 0 else _REHEARSAL_HORIZON_SECONDS
+    cycles = max(1, int(horizon / cycle_seconds) + 1)
+    return tuple(
+        entry
+        for index in range(cycles)
+        for entry in (
+            (index * cycle_seconds + 10.0, "reading_update"),
+            (index * cycle_seconds + 18.0, "meaning_on"),
+            (index * cycle_seconds + 24.0, "meaning_off"),
+        )
+    )
+
+
+def detect_devices(
+    *,
+    buttons_mode: str = "auto",
+    seconds: float | None = None,
+) -> tuple[CameraSource | None, ButtonSource | None, list[str]]:
+    """Pick the real device where it answers and a stand-in where it does not.
+
+    Returns `(camera, buttons, notes)`. A `None` camera means no rig answered and
+    the caller must stop — see the module docstring for why there is no fallback.
+    `notes` is what changed from the all-hardware default, for printing: a
+    substitution the operator did not ask for and cannot see is how a live test
+    ends up measuring the wrong thing.
+
+    `buttons_mode` is the override. Detection is a guess about the physical world
+    and a wrong guess during a hardware test is expensive, so `hardware` refuses
+    to substitute and `virtual` refuses to detect.
+    """
+
+    notes: list[str] = []
+
+    camera = Esp32Camera()
+    if not _camera_live(camera):
+        return None, None, notes
+
+    buttons: ButtonSource
+    if buttons_mode == "virtual":
+        buttons = ScriptedButtons(rehearsal_script(seconds))
+        notes.append("buttons: scheduled rehearsal (--buttons virtual)")
+    elif buttons_mode == "hardware":
+        # No probe: the operator has asserted the rig is there. A dead endpoint
+        # then produces a session with no events, which is the correct outcome of
+        # being told not to second-guess the wiring.
+        buttons = Esp32Buttons()
+    else:
+        hardware = Esp32Buttons()
+        if _buttons_live(hardware):
+            buttons = hardware
+        else:
+            buttons = ScriptedButtons(rehearsal_script(seconds))
+            notes.append(
+                "buttons: not reachable — running a scheduled rehearsal instead, "
+                "so the camera can still be tested end to end"
+            )
+
+    return camera, buttons, notes
 
 
 def _use_utf8() -> None:
@@ -108,16 +223,31 @@ def preflight() -> list[tuple[str, bool, str]]:
     # is powered off is the most common failure, and it looks exactly like a
     # correct configuration until a frame is asked for.
     if camera.configured:
-        rows.append(
-            ("ESP32-CAM", camera.frame() is not None, camera.capture_url)
-        )
+        rows.append(("ESP32-CAM", _camera_live(camera), camera.capture_url))
     else:
         rows.append(("ESP32-CAM", False, "ESP32_CAM_CAPTURE_URL not set"))
 
     if buttons.configured:
-        rows.append(("ESP32 buttons", buttons.read().reachable, buttons.buttons_url))
+        # Named for what its absence costs, not for the wire that is down: without
+        # buttons a session still reads pages, it just cannot be asked anything.
+        reachable = _buttons_live(buttons)
+        rows.append(
+            (
+                "ESP32 buttons",
+                reachable,
+                buttons.buttons_url
+                if reachable
+                else f"{buttons.buttons_url} — no answer; --buttons virtual rehearses instead",
+            )
+        )
     else:
-        rows.append(("ESP32 buttons", False, "ESP32_BUTTONS_URL not set"))
+        rows.append(
+            (
+                "ESP32 buttons",
+                False,
+                "ESP32_BUTTONS_URL not set — --buttons virtual rehearses instead",
+            )
+        )
 
     return rows
 
@@ -144,12 +274,21 @@ async def _run(args: argparse.Namespace) -> int:
         # degrades to a session with no text in it at all.
         print("Cannot start: OCR has no API key. Set GOOGLE_VISION_API_KEY in .env")
         return 1
-    if not ready["ESP32-CAM"]:
+
+    camera, buttons, notes = detect_devices(
+        buttons_mode=args.buttons, seconds=args.seconds
+    )
+    if camera is None or buttons is None:
         print("Cannot start: no camera. Check the device is powered and on the network.")
         return 1
 
+    for note in notes:
+        print(f"  {note}")
+    if notes:
+        print()
+
     runtime = ReadingRuntime.build_live(session_id=SESSION_ID, reader_id=READER_ID)
-    loop = DeviceLoop(runtime=runtime)
+    loop = DeviceLoop(runtime=runtime, camera=camera, buttons=buttons)
 
     print("Reading. Momentary button re-reads from where you point;")
     print("the toggle holds Meaning Mode. Ctrl-C to finish.\n")
@@ -160,7 +299,14 @@ async def _run(args: argparse.Namespace) -> int:
     analytics = await loop.run(max_ticks=max_ticks)
 
     print()
+    print(f"  devices         {camera.source_name} + {buttons.source_name}")
     print(f"  frames read     {loop.frames_processed}")
+    # Failures matter more than the count. A session that read 4 frames out of 600
+    # attempts is a Wi-Fi problem reported as a low page count, and the operator
+    # spends the afternoon looking at the OCR.
+    failures = getattr(camera, "failures", 0)
+    if failures:
+        print(f"  frames lost     {failures}  (camera unreachable or returned no image)")
     print(f"  gestures        {loop.gestures_run}")
     print(f"  pages           {analytics.pages_read}")
     print(f"  words           {analytics.words_read}")
@@ -179,6 +325,13 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=None,
         help="stop after this many seconds instead of running until Ctrl-C",
+    )
+    parser.add_argument(
+        "--buttons",
+        choices=("auto", "hardware", "virtual"),
+        default="auto",
+        help="auto falls back to a scheduled rehearsal when the buttons are not "
+        "reachable; hardware never substitutes; virtual never probes (default: auto)",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="show module logs")
     args = parser.parse_args(argv)

@@ -1,9 +1,14 @@
 """Run a reading session with no ESP32 on the desk.
 
+    python -m backend.app.simulated_session                        # generates its own pages
     python -m backend.app.simulated_session page.jpg              # one page, scripted reader
     python -m backend.app.simulated_session pages/ --minutes 15   # a folder, paced
     python -m backend.app.simulated_session page.jpg --realtime    # watch it happen
     python -m backend.app.simulated_session page.jpg --offline     # no key, no network
+
+With no arguments it generates four synthetic pages, uses their recorded Vision
+responses and runs the whole chain — no API key, no dataset, no network. That is
+the one command someone new to the project can run to see the system work.
 
 The sibling of `live_session`, and deliberately a *thin* one. Both files build the
 same runtime and hand it to the same `DeviceLoop`; they differ in three arguments:
@@ -33,6 +38,10 @@ It is not a substitute for `live_session --check`. A simulation proves the softw
 correct; it says nothing about whether the camera is on the network, whether the
 Wi-Fi drops frames under load, or whether the toggle is wired to the pin the
 firmware thinks it is. Those are hardware facts and only hardware answers them.
+
+To drive the real camera with a scheduled reader instead of real buttons — half a
+rig, which is how a rig usually arrives — use `live_session --buttons virtual`.
+That is a live session, not this: a real clock, real frames, real Vision calls.
 """
 
 from __future__ import annotations
@@ -55,6 +64,11 @@ logger = logging.getLogger(__name__)
 
 SESSION_ID = "simulated-session"
 READER_ID = "simulated-reader"
+
+# Where `--target`-less runs put their generated pages. Under the cache directory
+# because they are derived data: deleting them costs one regeneration.
+_SYNTHETIC_DIR = Path(__file__).resolve().parents[2] / ".taletrace_cache" / "synthetic"
+_SYNTHETIC_PAGES = 4
 
 # How long a simulated reader holds one page before the camera offers the next.
 # Twelve seconds is roughly a slow paragraph, and the point is only that it is
@@ -183,8 +197,42 @@ def build_session(
     return loop, clock
 
 
+def ensure_synthetic_pages(*, limit: int | None = None) -> list[Path]:
+    """Generated pages, made on first use and reused afterwards.
+
+    The zero-argument path. `scripts.synthetic_page` writes both the images and
+    the Vision responses that describe them, so the offline chain has something to
+    read without a key, a network or a photograph.
+
+    Generated, not photographed: good for the pointer, the queue and Merge Memory,
+    worthless for judging whether OCR can read a real page under a real lamp.
+    """
+
+    from scripts.synthetic_page import generate
+
+    existing = sorted(_SYNTHETIC_DIR.glob("page_*.png")) if _SYNTHETIC_DIR.exists() else []
+    if len(existing) < _SYNTHETIC_PAGES:
+        print(f"  generating {_SYNTHETIC_PAGES} synthetic pages in {_SYNTHETIC_DIR}")
+        generate(_SYNTHETIC_DIR, count=_SYNTHETIC_PAGES, force=False)
+        print()
+        existing = sorted(_SYNTHETIC_DIR.glob("page_*.png"))
+
+    if not existing:
+        raise FileNotFoundError(f"could not generate pages in {_SYNTHETIC_DIR}")
+    return existing[:limit] if limit else existing
+
+
 async def _run(args: argparse.Namespace) -> int:
-    images = collect_images(Path(args.target).expanduser(), limit=args.limit)
+    offline = args.offline
+    if args.target:
+        images = collect_images(Path(args.target).expanduser(), limit=args.limit)
+    else:
+        # No target: generate pages and use their recorded responses. Forced
+        # offline, because the whole point is a run that needs no key — a live
+        # Vision call on a generated page would also be a waste of a real quota
+        # to read text we already know the answer to.
+        images = ensure_synthetic_pages(limit=args.limit)
+        offline = True
 
     speed = 1.0 if args.realtime else args.speed
     seconds = args.minutes * 60.0
@@ -194,10 +242,10 @@ async def _run(args: argparse.Namespace) -> int:
           f"{f' … {images[-1].name}' if len(images) > 1 else ''})")
     print(f"  session     {seconds / 60:.0f} min of reading time")
     print(f"  clock       {'real time' if speed == 1.0 else f'{speed}x real per session second'}")
-    print(f"  OCR         {'recorded Vision responses (offline)' if args.offline else 'Google Vision (live)'}")
+    print(f"  OCR         {'recorded Vision responses (offline)' if offline else 'Google Vision (live)'}")
     print()
 
-    loop, clock = build_session(images, speed=speed, offline=args.offline)
+    loop, clock = build_session(images, speed=speed, offline=offline)
 
     # Ticks, not seconds, because the loop counts ticks and each advances the
     # virtual clock by `tick_seconds`. This is the same arithmetic `live_session`
@@ -222,7 +270,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "target",
-        help="an image, or a directory of images to feed one page at a time",
+        nargs="?",
+        help="an image, or a directory of images to feed one page at a time. "
+        "Omit it to generate synthetic pages and run with no key and no network.",
     )
     parser.add_argument(
         "--minutes",

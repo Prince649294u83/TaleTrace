@@ -20,9 +20,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from backend.app.live_session import preflight
+from backend.app.live_session import detect_devices, preflight, rehearsal_script
 from backend.app.modules.image_receiver.esp32_buttons import ButtonState, Esp32Buttons
 from backend.app.modules.image_receiver.esp32_camera import Esp32Camera
+# The module, not the name: this file defines its own `ScriptedButtons` test double
+# further down, which would shadow a direct import of the production class.
+from backend.app.modules.image_receiver import virtual_buttons
 from backend.app.modules.merge_memory.engine import MergeMemory
 from backend.app.modules.merge_memory.reconstruction import GroqReconstructor, pointer_offset
 from backend.app.modules.ocr.pipeline import OcrPipeline
@@ -1106,3 +1109,109 @@ class TestPreflight:
 
         assert "not set" in rows["ESP32-CAM"]
         assert "not set" in rows["ESP32 buttons"]
+
+
+class TestDeviceDetection:
+    """Per-device selection: the rig arrives in halves, so it is probed in halves.
+
+    The case worth guarding is a reachable camera with unreachable buttons. That
+    session runs, reads frames, and can never be asked anything — a blind session
+    that is indistinguishable from a working one until someone notices the gesture
+    count is zero. Detection turns it into a rehearsal and says so.
+
+    The probes are stubbed rather than served, because what is under test is the
+    choice made from a probe result, not HTTP.
+    """
+
+    def test_a_whole_rig_uses_the_hardware(self, monkeypatch):
+        monkeypatch.setattr("backend.app.live_session._camera_live", lambda _: True)
+        monkeypatch.setattr("backend.app.live_session._buttons_live", lambda _: True)
+
+        camera, buttons, notes = detect_devices()
+
+        assert isinstance(camera, Esp32Camera)
+        assert isinstance(buttons, Esp32Buttons)
+        assert notes == [], "nothing was substituted, so nothing should be announced"
+
+    def test_a_live_camera_with_dead_buttons_still_runs(self, monkeypatch):
+        """The hybrid. Half a rig is the normal state of a rig being built."""
+
+        monkeypatch.setattr("backend.app.live_session._camera_live", lambda _: True)
+        monkeypatch.setattr("backend.app.live_session._buttons_live", lambda _: False)
+
+        camera, buttons, notes = detect_devices()
+
+        assert isinstance(camera, Esp32Camera)
+        assert isinstance(buttons, virtual_buttons.ScriptedButtons)
+        assert any("rehearsal" in note for note in notes), (
+            "a substituted device the operator cannot see is how a live test ends "
+            "up measuring the wrong thing"
+        )
+
+    def test_no_camera_refuses_to_pretend(self, monkeypatch):
+        """There is deliberately no virtual-camera fallback: a live session that
+        replays JPEGs is a simulation wearing the wrong label."""
+
+        monkeypatch.setattr("backend.app.live_session._camera_live", lambda _: False)
+
+        camera, buttons, _notes = detect_devices()
+
+        assert camera is None and buttons is None
+
+    def test_hardware_mode_does_not_probe_or_substitute(self, monkeypatch):
+        """The override exists because detection is a guess about the physical
+        world, and during a hardware test a wrong guess is expensive."""
+
+        probes = []
+        monkeypatch.setattr("backend.app.live_session._camera_live", lambda _: True)
+        monkeypatch.setattr(
+            "backend.app.live_session._buttons_live",
+            lambda _: probes.append(1) or False,
+        )
+
+        _camera, buttons, notes = detect_devices(buttons_mode="hardware")
+
+        assert isinstance(buttons, Esp32Buttons)
+        assert probes == [], "the operator asserted the wiring; do not second-guess it"
+        assert notes == []
+
+    def test_virtual_mode_does_not_probe_or_detect(self, monkeypatch):
+        probes = []
+        monkeypatch.setattr("backend.app.live_session._camera_live", lambda _: True)
+        monkeypatch.setattr(
+            "backend.app.live_session._buttons_live",
+            lambda _: probes.append(1) or True,
+        )
+
+        _camera, buttons, notes = detect_devices(buttons_mode="virtual")
+
+        assert isinstance(buttons, virtual_buttons.ScriptedButtons)
+        assert probes == []
+        assert notes and "--buttons virtual" in notes[0]
+
+    def test_the_rehearsal_covers_the_whole_session(self):
+        """A one-shot script would leave the remaining minutes of a live camera
+        test exercising nothing but frame capture."""
+
+        script = rehearsal_script(600.0)
+
+        assert script[-1][0] >= 600.0, "the script goes quiet before the session ends"
+        assert {action for _, action in script} == {
+            "reading_update",
+            "meaning_on",
+            "meaning_off",
+        }
+
+    def test_an_open_ended_session_still_gets_a_schedule(self):
+        """`--seconds` is optional; Ctrl-C is the normal way to stop."""
+
+        assert rehearsal_script(None)[-1][0] >= 1800.0
+
+    def test_every_rehearsed_action_is_one_the_buttons_know(self):
+        """`ScriptedButtons` raises on an unknown action, so construction is the
+        check: a typo in the schedule would otherwise never fire and the test that
+        needed the press would still pass."""
+
+        buttons = virtual_buttons.ScriptedButtons(rehearsal_script(60.0))
+
+        assert buttons.remaining == len(rehearsal_script(60.0))
