@@ -181,14 +181,22 @@ class ReadingEngine:
 
         return self._focus_report
 
-    def current_text(self) -> str:
-        """Merge Memory's best text for the paragraph being read."""
+    def current_text(self, *, paragraph_index: int | None = None) -> str:
+        """Merge Memory's best text for the paragraph being read.
 
+        `paragraph_index` overrides the pointer for a caller that knows the reader
+        was somewhere else. Meaning Mode is that caller: pointing at a word
+        deliberately does not move the pointer, so the paragraph the finger was in
+        is not the paragraph the pointer holds.
+        """
+
+        pointer = self._state.pointer
         return self.memory.paragraph(
-            self._state.pointer.page_index, self._state.pointer.paragraph_index
+            pointer.page_index,
+            pointer.paragraph_index if paragraph_index is None else paragraph_index,
         )
 
-    def _previous_text(self) -> str:
+    def _previous_text(self, *, paragraph_index: int | None = None) -> str:
         """The paragraph before the pointer, for explanation context.
 
         Empty at the top of a page rather than reaching back to the previous
@@ -196,7 +204,11 @@ class ReadingEngine:
         paragraph across a turn is often a different column or a caption.
         """
 
-        paragraph = self._state.pointer.paragraph_index
+        paragraph = (
+            self._state.pointer.paragraph_index
+            if paragraph_index is None
+            else paragraph_index
+        )
         if paragraph <= 0:
             return ""
         return self.memory.paragraph(self._state.pointer.page_index, paragraph - 1)
@@ -529,19 +541,29 @@ class ReadingEngine:
             self._record(SessionEvent.WORD_SELECTED, self._last_selected_word)
 
         elif event is SessionEvent.MEANING_REQUESTED:
-            await self.meaning_mode_on(word=str(payload.get("word", "")))
+            await self.meaning_mode_on(
+                word=str(payload.get("word", "")),
+                paragraph_index=payload.get("paragraph_index"),
+            )
 
         elif event is SessionEvent.CAMERA_OFF:
             self.camera_off(str(payload.get("reason", "")))
 
     # ----------------------------------------------------------- meaning mode
 
-    async def meaning_mode_on(self, *, word: str = "") -> None:
+    async def meaning_mode_on(
+        self, *, word: str = "", paragraph_index: int | None = None
+    ) -> None:
         """MEANING_MODE_ON. A pause that is a statement about the text.
 
         Counted apart from an ordinary pause because they mean opposite things: a
         user pause says nothing about the page, while Meaning Mode says the reader
         hit something they could not read past.
+
+        `paragraph_index` is where the finger was, which `ReadingRuntime` resolves
+        into Merge Memory's coordinates. It steers the explanation only: the
+        friction is still charged to the paragraph the reader was *reading*, since
+        reaching ahead to ask about a word is evidence about here, not about there.
         """
 
         if self._state.is_meaning_mode:
@@ -565,8 +587,8 @@ class ReadingEngine:
         if self.ai is not None and target:
             self._explanation = await self.ai.explain(
                 word=target,
-                paragraph=self.current_text(),
-                previous_paragraph=self._previous_text(),
+                paragraph=self.current_text(paragraph_index=paragraph_index),
+                previous_paragraph=self._previous_text(paragraph_index=paragraph_index),
                 page_number=self._state.pointer.page_index,
             )
             if self._explanation.ok:

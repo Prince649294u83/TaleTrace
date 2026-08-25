@@ -1527,6 +1527,43 @@ class TestAiScenarios:
         assert context.page_number == FIRST_PAGE_INDEX
 
     @pytest.mark.asyncio
+    async def test_a_lookup_carries_the_paragraph_the_finger_was_in(self, clock):
+        """The pointed-at paragraph, not the one the pointer is parked on.
+
+        Meaning Mode deliberately does not move the pointer, so on a multi-
+        paragraph page the two diverge by design: point at the third paragraph
+        while reading the first and the pointer stays at the first. If the
+        explanation is built from the pointer, the model is asked about a word
+        alongside a paragraph the word does not appear in — and answers
+        confidently, because the request looks well formed.
+        """
+
+        explain = StubAiEngine(EXPLANATION)
+        runtime = build_runtime(clock, ai=bridge(explain=explain))
+        await runtime.feed_camera_frame(
+            recorded_paragraphs(PARAGRAPH_ONE, PARAGRAPH_TWO, PARAGRAPH_THREE)
+        )
+        await runtime.engine.start_session()
+        assert runtime.engine.state.pointer.paragraph_index == 0
+
+        clock.advance(20)
+        result = await runtime.feed_gesture_frame(
+            blank_frame(height=400),
+            # Inside "grandfather", the fifth word of the third paragraph.
+            finger=FingerPoint(x=400.0, y=310.0, confidence=0.9, direction=(0.0, -1.0)),
+            meaning_gesture=True,
+        )
+
+        assert result.selected_word.strip(".,") == "grandfather"
+        # The pointer has not moved: that is the whole reason this can go wrong.
+        assert runtime.engine.state.pointer.paragraph_index == 0
+
+        context = explain.calls[0].resolved_context()
+        assert context.selected_word.strip(".,") == "grandfather"
+        assert context.current_paragraph == PARAGRAPH_THREE
+        assert context.previous_paragraph == PARAGRAPH_TWO
+
+    @pytest.mark.asyncio
     async def test_earlier_lookups_are_offered_to_later_ones(self, clock):
         """Session memory is what lets the model say "like the word you asked about"."""
 
@@ -1797,3 +1834,134 @@ class TestFailureScenarios:
 
         with pytest.raises(RuntimeError, match="No OCR pipeline"):
             await runtime.engine.ingest_frame(recorded_page(PAGE_ONE))
+
+
+# ------------------------------------------------------------- golden scenario
+
+
+class TestGoldenScenario:
+    """One continuous session, walked once, with the whole end state asserted.
+
+    Every other class here isolates a stage so a failure names one module. This
+    one deliberately does the opposite: it drives the sequence a reader actually
+    produces — start, read, point, ask, resume, move on, ask again, finish — and
+    then asserts the complete final state in one place.
+
+    What it catches that the isolated scenarios cannot: a stage that is correct
+    in isolation and wrong in sequence. Meaning Mode pausing narration but not
+    resuming the same sentence; a paragraph that was read appearing in the focus
+    report under the wrong key because the pointer was moved by a gesture rather
+    than by hand; a lookup recorded twice because two paths both counted it. Each
+    of those passes a per-stage test and fails a session.
+    """
+
+    #: Fingertips inside particular words, from `recorded_paragraphs` geometry:
+    #: rows are 30px apart with 24px-tall boxes, columns 90px apart and 80 wide.
+    #: Paragraph one occupies rows 0-3, two rows 5-8, three rows 10-12.
+    IN_PARAGRAPH_ONE = FingerPoint(x=100.0, y=70.0, confidence=0.9, direction=(0.0, -1.0))
+    IN_PARAGRAPH_TWO = FingerPoint(x=100.0, y=160.0, confidence=0.9, direction=(0.0, -1.0))
+    IN_PARAGRAPH_THREE = FingerPoint(x=400.0, y=310.0, confidence=0.9, direction=(0.0, -1.0))
+
+    @pytest.mark.asyncio
+    async def test_the_golden_scenario(self, clock, audio):
+        explain = StubAiEngine(EXPLANATION)
+        runtime = build_runtime(clock, audio=audio, ai=bridge(explain=explain))
+        engine = runtime.engine
+
+        # 1. A frame arrives before the reader has started. OCR reads it, Merge
+        #    Memory holds it, and nothing has begun.
+        await runtime.feed_camera_frame(
+            recorded_paragraphs(PARAGRAPH_ONE, PARAGRAPH_TWO, PARAGRAPH_THREE)
+        )
+        assert engine.memory.paragraph_count(FIRST_PAGE_INDEX) == 3
+        assert not engine.state.is_reading
+
+        # 2. Session start. Narration queues from the pointer.
+        await engine.start_session()
+        assert engine.state.is_reading
+        assert audio.get_status().state is PlaybackState.PLAYING
+
+        # 3. The reader reads a while, then points at a later line to correct the
+        #    pointer — the momentary button.
+        clock.advance(25)
+        await runtime.feed_gesture_frame(
+            blank_frame(height=400), finger=self.IN_PARAGRAPH_TWO
+        )
+        after_first_point = engine.state.pointer
+        assert after_first_point.paragraph_index == 1
+
+        # 4. Reading on, then the toggle: point at a word in the *third*
+        #    paragraph while the pointer sits in the second, and hold Meaning Mode.
+        clock.advance(25)
+        pointer_before_meaning = engine.state.pointer
+        result = await runtime.feed_gesture_frame(
+            blank_frame(height=400),
+            finger=self.IN_PARAGRAPH_THREE,
+            meaning_gesture=True,
+        )
+        asked_about = result.selected_word.strip(".,")
+
+        assert engine.state.is_meaning_mode
+        assert audio.get_status().pause_reason is PauseReason.MEANING_MODE
+        # Asking is not reading past.
+        assert engine.state.pointer == pointer_before_meaning
+        # The explanation was built from the paragraph the finger was in.
+        assert explain.calls[0].resolved_context().current_paragraph == PARAGRAPH_THREE
+        assert engine.explanation.ok
+        assert engine.lookups == [result.selected_word]
+
+        # 5. Release. The interrupted sentence resumes, it does not skip.
+        clock.advance(30)
+        await engine.meaning_mode_off()
+        assert not engine.state.is_meaning_mode
+        assert audio.get_status().state is PlaybackState.PLAYING
+        assert engine.state.pointer == pointer_before_meaning
+
+        # 6. Reading resumes and a second, slower section produces a second
+        #    lookup — the evidence Reading Focus Analysis ranks on.
+        clock.advance(90)
+        await runtime.feed_gesture_frame(
+            blank_frame(height=400),
+            finger=self.IN_PARAGRAPH_THREE,
+            meaning_gesture=True,
+        )
+        await engine.meaning_mode_off()
+
+        # 7. Session end.
+        clock.advance(20)
+        analytics = await engine.finish_session(review=False)
+
+        # ------------------------------------------------ the complete end state
+        assert engine.state.is_finished and not engine.state.is_paused
+
+        # Merge Memory is what every word count came from.
+        held_words = sum(
+            len(engine.memory.paragraph(FIRST_PAGE_INDEX, index).split())
+            for index in range(3)
+        )
+        assert engine.memory.total_words == held_words
+        assert analytics.pages_read >= 1
+
+        # Both lookups were recorded once each, not twice by two paths.
+        assert len(engine.lookups) == 2
+        assert asked_about.lower() in engine.lookups[0].lower()
+
+        # Reading Focus Analysis ran, over the paragraphs the reader was in, and
+        # judged them against the baseline the session finished with.
+        focus = engine.focus_report
+        assert focus is not None
+        visited = [p.paragraph_index for p in focus.paragraphs]
+        assert visited == sorted(visited), "paragraphs must be reported in reading order"
+        assert 1 in visited, "the paragraph the reader was moved into is missing"
+        for paragraph in focus.paragraphs:
+            held = engine.memory.paragraph(paragraph.page_index, paragraph.paragraph_index)
+            assert paragraph.words == len(held.split())
+            assert 0.0 <= paragraph.revision_priority <= 100.0
+
+        # The friction is charged to where the reader was, and it is the same
+        # count the session recorded — two engines, one story.
+        assert sum(p.meaning_requests for p in focus.paragraphs) == 2
+
+        # Nothing in the report claims to know what the reader was doing.
+        prose = " ".join(e for p in focus.paragraphs for e in p.evidence).lower()
+        assert "distract" not in prose

@@ -582,10 +582,26 @@ async def run(args: argparse.Namespace) -> int:
                 "the prompt carries the reading mode",
                 "Reading mode:" in user_content,
             )
+            prompt_paragraph = _prompt_paragraph(user_content)
+            held = [
+                memory.paragraph(memory.current_page, index)
+                for index in range(memory.paragraph_count(memory.current_page))
+            ]
             stage.check(
                 "the paragraph in the prompt is Merge Memory's, not raw OCR",
-                _prompt_paragraph(user_content) == engine.current_text(),
+                prompt_paragraph in held,
                 "the AI was sent text Merge Memory does not hold",
+            )
+            # Not the pointer's paragraph. Meaning Mode does not move the pointer,
+            # so on a page with more than one paragraph the reader can point into
+            # the third while the pointer is still in the first — and comparing
+            # the prompt against the pointer would agree with itself while the
+            # model was being asked about a word from somewhere else entirely.
+            stage.check(
+                "the paragraph in the prompt is the one the word was pointed at in",
+                bare.lower() in prompt_paragraph.lower(),
+                "the AI was asked about a word alongside a paragraph it does not "
+                "appear in",
             )
             stage.check(
                 "the prompt names no hardcoded book",

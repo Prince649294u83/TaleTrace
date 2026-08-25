@@ -300,6 +300,23 @@ class ReadingRuntime:
     ) -> dict[str, Any]:
         """Fill in what Gesture cannot know: where its line sits in Merge Memory."""
 
+        if event is SessionEvent.MEANING_REQUESTED:
+            # The sentence rather than the line, because Gesture publishes the
+            # containing sentence here and it is the better match key: more words
+            # to overlap on than a line, and already the unit Merge Memory
+            # segments into.
+            #
+            # This matters more than for a pointer update. Meaning Mode does not
+            # move the pointer, so on a multi-paragraph page the pointed-at
+            # paragraph and the pointer's paragraph diverge *by design* — and an
+            # explanation built from the pointer asks the model about a word next
+            # to a paragraph the word does not appear in. The request looks well
+            # formed, so the answer comes back confident and wrong.
+            located = self._locate_line(str(payload.get("context", "")))
+            if located is None:
+                return payload
+            return {**payload, "paragraph_index": located[0]}
+
         if event is not SessionEvent.READING_POINTER_UPDATED:
             return payload
 
