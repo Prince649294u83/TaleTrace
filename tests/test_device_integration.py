@@ -1215,3 +1215,128 @@ class TestDeviceDetection:
         buttons = virtual_buttons.ScriptedButtons(rehearsal_script(60.0))
 
         assert buttons.remaining == len(rehearsal_script(60.0))
+
+
+# ------------------------------------------------- connecting to a real device
+
+
+class _FirmwareServer:
+    """The two firmware endpoints, served over a real socket on localhost.
+
+    Every other detection test in this file stubs `_camera_live`/`_buttons_live`,
+    because what those check is the *choice* made from a probe result. That leaves
+    one thing unproven and it is the thing that matters on the day the rig arrives:
+    that pointing the environment at a device which answers is enough, with no flag
+    and no code change. So nothing is stubbed here — real env vars, real `requests`,
+    real sockets — and the payloads are the ones the sketches actually send:
+
+        espcam/Almost_final.ino   port 80    GET /capture  -> image/jpeg
+        esp32/esp32.ino           port 8080  GET /buttons  -> {"btn_momentary":..,
+                                                              "btn_toggle":..}
+    """
+
+    def __init__(self) -> None:
+        # Not a real JPEG. `frame()` returns the bytes untouched and this test
+        # never decodes them; a fixture that needed OpenCV to prove a socket
+        # works would be testing the wrong layer.
+        self.jpeg = b"\xff\xd8\xff\xe0 not-a-real-jpeg \xff\xd9"
+        self.momentary = False
+        self.toggle = False
+        self.capture_hits = 0
+
+    def start(self) -> None:
+        import json
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from threading import Thread
+
+        device = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802 - stdlib's spelling
+                if self.path == "/capture":
+                    device.capture_hits += 1
+                    body, kind = device.jpeg, "image/jpeg"
+                elif self.path == "/buttons":
+                    body = json.dumps(
+                        {
+                            "btn_momentary": device.momentary,
+                            "btn_toggle": device.toggle,
+                        }
+                    ).encode()
+                    kind = "application/json"
+                else:
+                    self.send_error(404)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", kind)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_: object) -> None:
+                """Silence the per-request line; pytest output is not a web log."""
+
+        # Port 0: the OS picks a free one. Hardcoding 80 and 8080 would need root
+        # and would collide with anything else on the machine.
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.port = self._server.server_address[1]
+        Thread(target=self._server.serve_forever, daemon=True).start()
+
+    def stop(self) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+
+    @property
+    def capture_url(self) -> str:
+        return f"http://127.0.0.1:{self.port}/capture"
+
+    @property
+    def buttons_url(self) -> str:
+        return f"http://127.0.0.1:{self.port}/buttons"
+
+
+@pytest.fixture
+def firmware():
+    device = _FirmwareServer()
+    device.start()
+    try:
+        yield device
+    finally:
+        device.stop()
+
+
+class TestConnectingToARealDevice:
+    """Does plugging the rig in actually connect it? Nothing stubbed."""
+
+    def test_a_device_that_answers_is_detected_and_used(self, firmware, monkeypatch):
+        monkeypatch.setenv("ESP32_CAM_CAPTURE_URL", firmware.capture_url)
+        monkeypatch.setenv("ESP32_BUTTONS_URL", firmware.buttons_url)
+
+        camera, buttons, notes = detect_devices()
+
+        # The real classes, chosen automatically, with nothing substituted.
+        assert isinstance(camera, Esp32Camera)
+        assert isinstance(buttons, Esp32Buttons)
+        assert notes == [], f"something was substituted for hardware: {notes}"
+
+        # And they work: a frame comes back, and a switch the reader flips is seen
+        # as the edge the runtime acts on.
+        assert camera.frame() == firmware.jpeg
+        assert firmware.capture_hits >= 1
+
+        assert buttons.poll() == [SessionEvent.CAMERA_ON]
+        firmware.toggle = True
+        assert buttons.poll() == [SessionEvent.MEANING_MODE_ON]
+        firmware.toggle = False
+        assert buttons.poll() == [SessionEvent.MEANING_MODE_OFF]
+
+    def test_preflight_reports_the_same_device_as_reachable(self, firmware, monkeypatch):
+        """`--check` and the session must agree, or --check is worse than nothing."""
+
+        monkeypatch.setenv("ESP32_CAM_CAPTURE_URL", firmware.capture_url)
+        monkeypatch.setenv("ESP32_BUTTONS_URL", firmware.buttons_url)
+
+        rows = {name: ok for name, ok, _ in preflight()}
+
+        assert rows["ESP32-CAM"] is True
+        assert rows["ESP32 buttons"] is True
