@@ -1,0 +1,42 @@
+.time-filter {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 4px;
+}
+.time-filter-btn {
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+.time-filter-btn-active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 0 var(--border);
+}
+
+.chart-card-head {
+  margin-bottom: 6px;
+}
+.chart-wrap {
+  width: 100%;
+  height: 220px;
+  margin-top: 10px;
+}
+.analysis-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .analysis-row {
+    grid-template-columns: 1fr;
+  }
+}

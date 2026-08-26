@@ -66,6 +66,23 @@ class ReadingSpeedService:
     def profile_for(self, reader_id: str) -> ReaderProfile:
         return ReaderProfile(reader_id=reader_id, baseline=self.baseline_for(reader_id))
 
+    def restore_baseline(self, baseline: ReadingBaseline) -> None:
+        """Adopt a baseline measured in an earlier process.
+
+        Deliberately not `calibrate` or `set_manual_baseline`: both of those
+        *decide* a baseline and stamp it with the method that produced it. This
+        one is reading back a decision already made and must not relabel it — a
+        measured baseline that came back from storage as MANUAL would change
+        `is_evidence`, and analytics declines to infer difficulty from a baseline
+        that is only a claim.
+
+        Takes the whole `ReadingBaseline` rather than a number for the same
+        reason. This is the seam the module docstring describes: when `_baselines`
+        becomes a repository, this method is what it replaces.
+        """
+
+        self._baselines[baseline.reader_id] = baseline
+
     def calibrate(
         self, reader_id: str, *, word_count: int, elapsed_ms: int
     ) -> ReadingBaseline:

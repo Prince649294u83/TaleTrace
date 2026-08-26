@@ -303,12 +303,38 @@ class DifficultyMetrics(BaseModel):
 class SessionAnalytics(BaseModel):
     """What a session revealed, computed after the fact.
 
-    Overlaps `PlaybackStatistics` from the audio engine by design: when TTS is
-    on, the audio engine has already counted spoken sentences and words far more
-    accurately than this module could infer them, so analytics ingests those
-    numbers instead of recomputing them. `tts_assisted` records which happened,
-    because a session read aloud and a session read silently are not comparable
-    measurements of the same reader.
+    Distinct from `PlaybackStatistics` from the audio engine, and the distinction
+    is the point: these fields measure the reader — words covered, over the
+    reader's reading clock — while `PlaybackStatistics` measures narration, in
+    sentences and words spoken aloud. Neither substitutes for the other. A reader
+    who listened to a whole page while pointing at four words covered a page and
+    was read four words, and both numbers are true.
+
+    So `words_read` is reading progress whether narration was on or off, and
+    `tts_assisted` records only *that* it was on — a caveat when comparing the
+    pace, because TTS paces the reader instead of the reader pacing themselves,
+    not a switch that changes how the pace is computed.
+
+    `reading_duration_ms` is the reader's reading clock with pauses and Meaning
+    Mode excluded (`ProgressSnapshot.elapsed_reading_ms`, or the observations'
+    sum when the snapshot never advanced); `wall_duration_ms` is the whole
+    session. Neither is ever `PlaybackStatistics.reading_time_ms`, which counts
+    time spent *speaking*. A single field meaning "reading time" when narration
+    is off and "speaking time" when it is on is unreadable everywhere
+    downstream — the baseline `apply_suggested_baseline` adapts from, the
+    minutes the website prints, the difficulty each page is judged against. The
+    whole contract, in one place:
+
+        words_read           reader    — pointer-confirmed progress
+        reading_duration_ms  reader    — progress clock, pauses excluded
+        wall_duration_ms     reader    — whole session
+        words_spoken         narration — `PlaybackStatistics`
+        reading_time_ms      narration — `PlaybackStatistics`, speaking clock
+        tts_assisted         metadata  — narration was on
+
+    No playback-duration field is mirrored here. Nothing on the website or the
+    rig asks for one, and `PlaybackStatistics` already carries both its clocks
+    for whoever wants them.
     """
 
     session_id: str

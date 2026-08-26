@@ -17,6 +17,8 @@ reconstruction prompt, the edge detection and the loop ordering are all real.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -34,7 +36,7 @@ from backend.app.modules.reading_engine.device_loop import DeviceLoop
 from backend.app.modules.reading_engine.runtime import ReadingRuntime
 from backend.app.shared.constants import FIRST_PAGE_INDEX
 from backend.app.shared.events import SessionEvent
-from backend.app.shared.groq_keys import ai_engine_key
+from backend.app.shared.groq_keys import ai_engine_key, chat_model, fast_model
 
 
 # ---------------------------------------------------------------- test doubles
@@ -1109,6 +1111,41 @@ class TestPreflight:
 
         assert "not set" in rows["ESP32-CAM"]
         assert "not set" in rows["ESP32 buttons"]
+
+    def test_a_retired_model_is_reported_even_though_the_key_works(self, monkeypatch):
+        """The failure this row exists for, and the reason it is not free.
+
+        Groq retired `llama-3.3-70b-versatile`. Every key was still valid, so both
+        Groq rows said `ready`, and every explanation came back as an error payload
+        while the reader waited with a finger on a word. Key presence and model
+        existence are different facts and only one of them is checkable locally.
+
+        `probe_models=False` by default so the website's device tile — which polls
+        this — does not pay a vendor round-trip per poll, and so the suite does not
+        need a network. Both halves are asserted here: a default that flipped to
+        True would put this whole class on the network.
+        """
+
+        import groq
+
+        listed = SimpleNamespace(data=[SimpleNamespace(id=fast_model())])  # chat model gone
+
+        class _FakeGroq:
+            def __init__(self, *, api_key):
+                self.models = SimpleNamespace(list=lambda: listed)
+
+        monkeypatch.setattr(groq, "Groq", _FakeGroq)
+        monkeypatch.setenv("GROQ_API_KEY_1", "gsk-valid")
+        monkeypatch.delenv("ESP32_CAM_CAPTURE_URL", raising=False)
+        monkeypatch.delenv("ESP32_BUTTONS_URL", raising=False)
+
+        default = [name for name, _, _ in preflight()]
+        probed = dict((name, (ok, detail)) for name, ok, detail in preflight(probe_models=True))
+
+        assert "Groq — models" not in default, "the default must not touch the network"
+        assert probed["Groq — AI Engine"][0] is True
+        assert probed["Groq — models"][0] is False
+        assert chat_model() in probed["Groq — models"][1]
 
 
 class TestDeviceDetection:

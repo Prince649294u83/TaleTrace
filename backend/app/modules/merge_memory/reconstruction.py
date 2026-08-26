@@ -37,18 +37,12 @@ matches the reference, which printed a warning and carried on.
 from __future__ import annotations
 
 import logging
-import os
 from difflib import SequenceMatcher
 from typing import Any
 
-from backend.app.shared.groq_keys import merge_engine_key
+from backend.app.shared.groq_keys import chat_model, fast_model, merge_engine_key
 
 logger = logging.getLogger(__name__)
-
-# Carried over from the reference implementation unchanged.
-_MERGE_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
-# The same-page check runs on every frame, so it uses the fast model (~150ms).
-_PAGE_CHECK_MODEL = os.environ.get("GROQ_FAST_MODEL", "llama-3.1-8b-instant")
 
 # Low temperature: this is structural text repair, not composition.
 _MERGE_TEMPERATURE = 0.1
@@ -110,8 +104,8 @@ class GroqReconstructor:
         self,
         *,
         api_key: str | None = None,
-        merge_model: str = _MERGE_MODEL,
-        page_check_model: str = _PAGE_CHECK_MODEL,
+        merge_model: str | None = None,
+        page_check_model: str | None = None,
         client: Any = None,
     ) -> None:
         # `GROQ_API_KEY_2`, never the AI Engine's key. The camera loop calls this
@@ -119,8 +113,12 @@ class GroqReconstructor:
         # reader request; one shared credential makes a rate limit hit by the
         # former stop the latter. See `shared/groq_keys.py`.
         self._api_key = api_key if api_key is not None else merge_engine_key()
-        self._merge_model = merge_model
-        self._page_check_model = page_check_model
+        # Resolved here rather than as a default argument: a default is evaluated
+        # at import, and several entry points load the `.env` afterwards.
+        # The reference's capable/fast split, kept — the same-page check runs on
+        # every frame that might be a turn, so it must not wait on the big model.
+        self._merge_model = merge_model or chat_model()
+        self._page_check_model = page_check_model or fast_model()
         self._client = client
 
     @property

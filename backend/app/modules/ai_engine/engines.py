@@ -8,7 +8,6 @@ Reading Engine, so no engine is tied to a specific book.
 
 import json
 import logging
-import os
 
 from dotenv import load_dotenv
 from groq import Groq
@@ -22,13 +21,11 @@ from backend.app.modules.ai_engine.models import (
     ImageType,
 )
 from backend.app.modules.ai_engine.prompts import PromptBuilder
-from backend.app.shared.groq_keys import ai_engine_key
+from backend.app.shared.groq_keys import ai_engine_key, chat_model
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 _client: Groq | None = None
 _prompts = PromptBuilder()
@@ -72,7 +69,7 @@ def _safe_json_completion(system_prompt: str, user_content: str, max_retries: in
     for _ in range(max_retries + 1):
         try:
             response = _get_client().chat.completions.create(
-                model=DEFAULT_MODEL,
+                model=chat_model(),
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content},

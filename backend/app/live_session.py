@@ -45,22 +45,31 @@ import os
 import sys
 
 from backend.app.core.environment import load_environment
+from backend.app.modules.database.recording import (
+    READER_ID,
+    hydrate_reading_speed,
+    record_finished_session,
+)
 from backend.app.modules.image_receiver import Esp32Buttons, Esp32Camera
 from backend.app.modules.image_receiver.protocols import ButtonSource, CameraSource
 from backend.app.modules.image_receiver.virtual_buttons import ScriptedButtons
 from backend.app.modules.merge_memory.reconstruction import GroqReconstructor
+from backend.app.modules.reading_engine.ai_bridge import bridge_for_session
 from backend.app.modules.reading_engine.device_loop import DeviceLoop
 from backend.app.modules.reading_engine.runtime import ReadingRuntime
 from backend.app.shared.groq_keys import (
     AI_ENGINE_VARIABLE,
+    CHAT_MODEL_VARIABLE,
     MERGE_ENGINE_VARIABLE,
     ai_engine_key,
+    chat_model,
+    fast_model,
+    merge_engine_key,
 )
 
 logger = logging.getLogger(__name__)
 
 SESSION_ID = "live-session"
-READER_ID = "live-reader"
 
 # How long the rehearsal waits between rounds of presses when the buttons are
 # missing, and how long an open-ended session is assumed to run for scheduling
@@ -84,6 +93,34 @@ def _buttons_live(buttons: Esp32Buttons) -> bool:
     """Whether the button endpoint answers. Same reasoning as `_camera_live`."""
 
     return buttons.configured and buttons.read().reachable
+
+
+def _groq_models_live(key: str) -> tuple[bool, str]:
+    """Whether the configured model names still exist on Groq.
+
+    Same reasoning as `_camera_live`, for a vendor instead of a device: a key that
+    authenticates against a model that has been retired looks exactly like a
+    working configuration, and the first sign of trouble is an `{"error": ...}`
+    where the reader's explanation should be. Groq retired
+    `llama-3.3-70b-versatile` and this row is what would have said so.
+
+    One `models.list()` — no tokens, no completion, and it names the missing model
+    rather than the variable, because the fix is usually to unset a stale
+    `GROQ_MODEL` rather than to set one.
+    """
+
+    from groq import Groq
+
+    wanted = {chat_model(), fast_model()}
+    try:
+        available = {model.id for model in Groq(api_key=key).models.list().data}
+    except Exception as error:  # noqa: BLE001 — a preflight row, not a failure
+        return False, f"could not list models ({type(error).__name__})"
+
+    missing = sorted(wanted - available)
+    if missing:
+        return False, f"{', '.join(missing)} no longer on Groq — unset or update {CHAT_MODEL_VARIABLE}"
+    return True, ", ".join(sorted(wanted))
 
 
 def rehearsal_script(
@@ -179,13 +216,18 @@ def _use_utf8() -> None:
             pass
 
 
-def preflight() -> list[tuple[str, bool, str]]:
+def preflight(*, probe_models: bool = False) -> list[tuple[str, bool, str]]:
     """What the rig can and cannot do right now, as (name, ok, detail).
 
     Secrets are reported as present or absent and never printed. Each row names
     the consequence rather than the variable, because "GROQ_API_KEY missing" and
     "page text will be raw OCR" are the same fact and only one of them tells the
     operator whether to bother starting.
+
+    `probe_models` asks Groq whether the configured model names still exist. Off by
+    default and on for `--check`: the website polls this for its device tile and a
+    vendor round-trip per poll buys nothing there, while an operator asking why
+    nothing works needs the one answer no local check can give.
     """
 
     camera = Esp32Camera()
@@ -218,6 +260,14 @@ def preflight() -> list[tuple[str, bool, str]]:
             else f"{AI_ENGINE_VARIABLE} not set — Meaning Mode cannot explain a word",
         ),
     ]
+
+    # Only worth asking once a key exists, and only once: both engines' names come
+    # from `groq_keys` and both keys see the same catalogue, so one call answers for
+    # both. Skipped with no key, because the rows above already say why.
+    key = ai_engine_key() or merge_engine_key()
+    if probe_models and key:
+        models_ok, models_detail = _groq_models_live(key)
+        rows.append(("Groq — models", models_ok, models_detail))
 
     # Reached rather than merely configured: a URL that points at a device which
     # is powered off is the most common failure, and it looks exactly like a
@@ -259,7 +309,7 @@ def _report(rows: list[tuple[str, bool, str]]) -> None:
 
 
 async def _run(args: argparse.Namespace) -> int:
-    rows = preflight()
+    rows = preflight(probe_models=args.check)
 
     print("TaleTrace — live session")
     _report(rows)
@@ -287,7 +337,23 @@ async def _run(args: argparse.Namespace) -> int:
     if notes:
         print()
 
-    runtime = ReadingRuntime.build_live(session_id=SESSION_ID, reader_id=READER_ID)
+    # The baseline before the runtime, and the same service handed to it. `build`
+    # makes its own `ReadingSpeedService` when it is not given one, so hydrating
+    # and not passing it on would look exactly like not hydrating: the reader
+    # measured at 220 wpm in the browser would be scored against the default 200
+    # and every page would come back unrated.
+    speed = hydrate_reading_speed()
+    ai = bridge_for_session()
+    if ai is None:
+        print(f"  No {AI_ENGINE_VARIABLE}: Meaning Mode will pause but not explain,")
+        print("  and the session will finish with no summary, flashcards or quiz.\n")
+
+    runtime = ReadingRuntime.build_live(
+        session_id=SESSION_ID,
+        reader_id=READER_ID,
+        ai=ai,
+        speed=speed,
+    )
     loop = DeviceLoop(runtime=runtime, camera=camera, buttons=buttons)
 
     print("Reading. Momentary button re-reads from where you point;")
@@ -297,6 +363,15 @@ async def _run(args: argparse.Namespace) -> int:
     # second, which is the reference's 0.1s delay.
     max_ticks = int(args.seconds * 10) if args.seconds else None
     analytics = await loop.run(max_ticks=max_ticks)
+
+    # After the loop, not during it. A session is written once, whole — the
+    # website should never show a reading that is still growing.
+    row_id, note = record_finished_session(
+        runtime.engine,
+        analytics,
+        name="Live Reading",
+        source_reference=f"{camera.source_name} + {buttons.source_name}",
+    )
 
     print()
     print(f"  devices         {camera.source_name} + {buttons.source_name}")
@@ -310,6 +385,7 @@ async def _run(args: argparse.Namespace) -> int:
     print(f"  gestures        {loop.gestures_run}")
     print(f"  pages           {analytics.pages_read}")
     print(f"  words           {analytics.words_read}")
+    print(f"  session         {row_id or note}")
     return 0
 
 

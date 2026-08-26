@@ -45,9 +45,11 @@ CALIBRATION_MS = 60_000
 def _fake_playback_statistics(analytics_words: int, reading_ms: int) -> PlaybackStatistics:
     """What the audio engine would hand over after narrating this session.
 
-    Slightly different from the tracker's own numbers on purpose: the engine
-    counts words as it speaks them, so ingesting its tally should visibly override
-    what Reading Speed inferred rather than coincidentally matching it.
+    Deliberately *not* equal to the tracker's own numbers: the engine counts words
+    as it speaks them, which is a different quantity from words the reader
+    covered. The demo passes them so `--tts` shows narration reported alongside
+    reading progress without redefining it — `words_read` must stay at the
+    tracker's count, and only `tts_assisted` should change.
     """
 
     return PlaybackStatistics(

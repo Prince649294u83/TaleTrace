@@ -1,0 +1,47 @@
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.settings-section + .settings-section {
+  margin-top: 4px;
+}
+.settings-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 600px) {
+  .settings-fields {
+    grid-template-columns: 1fr;
+  }
+}
+.appearance-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.appearance-option {
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.appearance-option-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.save-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 0 2px;
+}

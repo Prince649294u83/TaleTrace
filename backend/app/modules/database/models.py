@@ -31,8 +31,79 @@ class TimestampMixin:
     )
 
 
+class Reader(TimestampMixin, Base):
+    """What the engine needs to know about the person reading. One row, for now.
+
+    No name, no email, no password. Those belong to whatever performs
+    authentication, and nothing here does: the website's login screen is a
+    `localStorage` gate for the look of the thing, and no credential ever reaches
+    this server. Keeping identity out of this table means there is no second copy
+    of it to disagree with the first, and no column that looks like an account
+    when there are no accounts.
+
+    What is here is the reading profile — the settings that change how a session
+    is measured or played back. `device_prefs` (text-to-speech, ambient music,
+    read-out-meaning) is not yet consulted by the runtime; this is where it lands
+    when it is, which is why it is stored server-side rather than left in the
+    browser with the rest of the cosmetics.
+
+    `id` is a stable string, not a generated UUID, because `ReadingSpeedService`
+    keys baselines by reader id and the rig passes one in from
+    `recording.READER_ID`. A fresh id per row would orphan the calibration.
+    """
+
+    __tablename__ = "readers"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+
+    # The reader's own pace — a whole serialised `ReadingBaseline`, not just the
+    # number. `is_evidence` is derived from `calibrated` and `method`, and
+    # analytics refuses to infer difficulty from a baseline that is only an
+    # assumption; storing the wpm alone would restart every session claiming a
+    # measured baseline it never measured.
+    #
+    # Duplicated from `ReadingSpeedService._baselines` on purpose: that store is
+    # in memory and dies with the process, so without this column a reader
+    # recalibrates every time the server restarts. This row is the durable copy;
+    # the service is the working one, hydrated from here at startup.
+    baseline_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    reading_speed_preset: Mapped[str | None] = mapped_column(String(16))
+
+    reader_type: Mapped[str | None] = mapped_column(String(32))
+    device_prefs: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    theme: Mapped[str] = mapped_column(String(16), default="dark")
+
+
+class Folder(TimestampMixin, Base):
+    """A single-level grouping of sessions. No nesting, per the frontend spec."""
+
+    __tablename__ = "folders"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(255))
+
+
 class Session(TimestampMixin, Base):
-    """A TaleTrace reading session."""
+    """A TaleTrace reading session.
+
+    The measured columns are a flattened copy of `SessionAnalytics`, not a second
+    calculation of it: every one is assigned straight from the value
+    `ReadingEngine.finish_session` returned. Flattened rather than stored as JSON
+    because the dashboard sums `pages_read` across today's rows, and summing
+    inside a JSON blob means loading every session to add up two integers.
+
+    `review_payload` is the opposite case and is stored whole. It is one AI
+    response — flashcards, quiz, words learned and summary from a single call —
+    and the shape the Quizzes and Flashcards pages will want from it is not
+    settled yet. Splitting it across the `quizzes` and `flashcards` tables now
+    would mean deciding that shape before anything reads it, and `words_learned`
+    has no table at all. Those two tables are left as they were found.
+
+    `focus_payload` is stored for a different reason again: unlike the review, a
+    `FocusReport` can never be regenerated. It is derived from per-paragraph
+    timings that exist only in the live engine's memory, so a session finished
+    without saving it has lost that analysis permanently.
+    """
 
     __tablename__ = "sessions"
 
@@ -40,6 +111,31 @@ class Session(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(32), default="active", index=True)
     source_reference: Mapped[str | None] = mapped_column(String(2048))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    name: Mapped[str] = mapped_column(String(255), default="Reading Session")
+    folder_id: Mapped[str | None] = mapped_column(
+        ForeignKey("folders.id", ondelete="SET NULL"), index=True
+    )
+
+    # --- measured, copied from SessionAnalytics ---
+    baseline_wpm: Mapped[float] = mapped_column(Float, default=0.0)
+    session_wpm: Mapped[float] = mapped_column(Float, default=0.0)
+    words_read: Mapped[int] = mapped_column(Integer, default=0)
+    pages_read: Mapped[int] = mapped_column(Integer, default=0)
+    reading_duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    wall_duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    lookup_count: Mapped[int] = mapped_column(Integer, default=0)
+    meaning_requests: Mapped[int] = mapped_column(Integer, default=0)
+
+    # --- concluded ---
+    # Stored in the backend's own vocabulary (low/medium/high/unknown) and
+    # translated at the HTTP edge. Storing the website's words would put a
+    # presentation choice in the database and make `unknown` unrepresentable.
+    difficulty: Mapped[str] = mapped_column(String(16), default="unknown")
+    summary: Mapped[str | None] = mapped_column(Text)
+    review_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    focus_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    lookups: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     ocr_results: Mapped[list[OCRResult]] = relationship(
         back_populates="session", cascade="all, delete-orphan"

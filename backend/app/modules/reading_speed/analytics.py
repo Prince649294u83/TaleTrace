@@ -203,20 +203,25 @@ def summarize_session(
 ) -> SessionAnalytics:
     """Everything one session revealed, computed once at the end.
 
-    When `playback` is supplied the audio engine has already counted spoken
-    sentences and words while speaking them, which is strictly more accurate than
-    anything this module can infer from a pointer. So those counts are ingested
-    rather than recomputed — the same reason this module has no diagnostics of its
-    own. `tts_assisted` records which path was taken, because a session read
-    aloud and a session read silently are not comparable measurements of the same
-    reader: TTS paces the reader instead of the reader pacing themselves.
+    Every headline number comes from reading progress — how far the pointer got,
+    over the reader's own reading clock — whether or not the session was narrated.
+    `playback` is used for exactly one thing: `tts_assisted`, which records that
+    narration was on. It is metadata about the session, not an input to the
+    measurement, because "words the TTS engine spoke" and "words the reader
+    covered" are different quantities and only the second one is reading speed.
+    The spoken counts remain available in full as `PlaybackStatistics`.
+
+    `tts_assisted` still matters when reading the number: a session read aloud
+    and a session read silently are not comparable measurements of the same
+    reader, because TTS paces the reader instead of the reader pacing themselves.
+    That is a caveat on the pace, not a reason to compute it differently.
 
     Returns a suggested baseline but never applies one. Moving a baseline is
     `calibration.adapt()`'s decision, and making it a side effect of asking for a
     summary would mean reading analytics twice changed the reader's profile.
     """
 
-    words_read, reading_ms, wall_ms, pages_read = _totals(snapshot, observations, playback)
+    words_read, reading_ms, wall_ms, pages_read = _totals(snapshot, observations)
     session_wpm = (
         round(words_read / (reading_ms / 60_000.0), 1)
         if reading_ms >= MIN_MEASURABLE_READING_MS and words_read
@@ -267,28 +272,42 @@ def summarize_session(
 def _totals(
     snapshot: ProgressSnapshot,
     observations: list[PageObservation],
-    playback: PlaybackStatistics | None,
 ) -> tuple[int, int, int, int]:
-    """Reconcile the session's headline numbers across three possible sources.
+    """The session's headline numbers, from reading progress and nothing else.
 
-    The audio engine's tally wins when present, the tracker's snapshot is the
-    silent-reading fallback, and the per-page observations backstop both — a
-    session whose pages were all recorded but whose snapshot was never advanced
-    still reports the words it covered instead of zero.
+    Two sources, and they measure the same thing: the tracker's snapshot is how
+    far the reader got, and the per-page observations backstop it — a session
+    whose pages were all recorded but whose snapshot was never advanced still
+    reports the words it covered instead of zero.
+
+    Narration is deliberately *not* a third source, and it used to be the first.
+    `PlaybackStatistics.words_spoken` counts words the TTS engine said out loud,
+    which is a fact about the audio engine, not about the reader: narration is
+    driven by the pointer and the pointer only advances when a gesture selects a
+    word, so a reader who listened to a whole book while pointing four times had
+    four words spoken from where they pointed. Preferring that number reported an
+    hour-long narrated session as ten words read. It is still reported — as
+    `PlaybackStatistics`, next to the sentence count, where it belongs — and
+    `tts_assisted` still records that narration was on. It is no longer allowed
+    to define reading progress.
+
+    That is also what makes narrated and silent sessions comparable: both read
+    `words_confirmed`, which is `content.words_before(pointer)`, and narration
+    never moves the pointer. Identical progress gives an identical count by
+    construction rather than by coincidence.
     """
 
     observed_words = sum(observation.words for observation in observations)
     observed_ms = sum(observation.reading_ms for observation in observations)
 
-    if playback is not None:
-        words = playback.words_spoken or observed_words or snapshot.words_confirmed
-        reading_ms = playback.reading_time_ms or observed_ms or snapshot.elapsed_reading_ms
-        wall_ms = playback.playback_time_ms or snapshot.elapsed_wall_ms
-        pages_read = playback.pages_read or len(observations)
-    else:
-        words = snapshot.words_confirmed or observed_words
-        reading_ms = snapshot.elapsed_reading_ms or observed_ms
-        wall_ms = snapshot.elapsed_wall_ms
-        pages_read = len(observations) or snapshot.pages_visited
+    words = snapshot.words_confirmed or observed_words
+    # The reader's reading clock, both branches, which is what `ProgressSnapshot`
+    # documents it as: paused and Meaning Mode intervals excluded. Never
+    # playback's `reading_time_ms` — that is time spent speaking, a different
+    # quantity, and silently swapping the two is how one field came to mean two
+    # things depending on whether narration happened to be on.
+    reading_ms = snapshot.elapsed_reading_ms or observed_ms
+    wall_ms = snapshot.elapsed_wall_ms
+    pages_read = len(observations) or snapshot.pages_visited
 
     return words, reading_ms, max(wall_ms, reading_ms), pages_read

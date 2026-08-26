@@ -1,4 +1,4 @@
-"""Which Groq key each subsystem uses, and why there are two of them.
+"""Which Groq key and model each subsystem uses, and why there are two of each.
 
 Two subsystems in TaleTrace call Groq, and they call it for unrelated reasons:
 
@@ -18,9 +18,9 @@ means; a quota exhausted by explanations must not stop the page from being read.
 Sharing one key makes those two failures the same failure, and the busier
 subsystem always causes it.
 
-This module resolves credentials only. It deliberately does not build, cache or
-hand out a client: each subsystem constructs its own, so neither holds a reference
-to the other's and no accidental sharing is possible.
+This module resolves credentials and model names only. It deliberately does not
+build, cache or hand out a client: each subsystem constructs its own, so neither
+holds a reference to the other's and no accidental sharing is possible.
 
 The fallback to `GROQ_API_KEY` is for the reference tree and for any machine still
 on a single-key `.env`. It is a place to *find* a credential, not a shared client —
@@ -37,6 +37,18 @@ _LEGACY = "GROQ_API_KEY"
 
 AI_ENGINE_VARIABLE = "GROQ_API_KEY_1"
 MERGE_ENGINE_VARIABLE = "GROQ_API_KEY_2"
+
+# Both subsystems' model names, here rather than one per module. They were one per
+# module, and when Groq retired `llama-3.3-70b-versatile` that meant three stale
+# copies: every explanation 404'd three times and returned an error payload, every
+# merge fell back to raw OCR, and `--check` still reported both engines OK because
+# it only ever looked at the keys. A model name is a vendor's decision with a shelf
+# life. One home, so the next retirement is one edit and one preflight row.
+CHAT_MODEL_VARIABLE = "GROQ_MODEL"
+FAST_MODEL_VARIABLE = "GROQ_FAST_MODEL"
+
+_CHAT_MODEL = "openai/gpt-oss-120b"
+_FAST_MODEL = "openai/gpt-oss-20b"
 
 
 def _resolve(variable: str) -> str:
@@ -58,6 +70,23 @@ def merge_engine_key() -> str:
     """The key for reconstruction, OCR cleanup and the same-page check. Never the AI key."""
 
     return _resolve(MERGE_ENGINE_VARIABLE)
+
+
+def chat_model() -> str:
+    """The model for explanations and for text reconstruction.
+
+    A function, not a constant, because several entry points call
+    `load_environment()` *after* importing the engines — a name captured at import
+    time is the one from before the `.env` was read.
+    """
+
+    return (os.environ.get(CHAT_MODEL_VARIABLE) or "").strip() or _CHAT_MODEL
+
+
+def fast_model() -> str:
+    """The model for the same-page check, which runs on every frame that may be a turn."""
+
+    return (os.environ.get(FAST_MODEL_VARIABLE) or "").strip() or _FAST_MODEL
 
 
 def describe() -> list[tuple[str, str, bool]]:

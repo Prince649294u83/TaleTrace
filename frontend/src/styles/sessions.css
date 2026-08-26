@@ -1,0 +1,155 @@
+/* ---------- sessions file manager ---------- */
+.folder-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.folder-block.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.folder-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+.folder-header:hover {
+  background: var(--surface-2);
+}
+.folder-header svg.chevron {
+  transition: transform 0.15s ease;
+  color: var(--text-faint);
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+.folder-header .chevron-open {
+  transform: rotate(90deg);
+}
+.folder-name {
+  font-weight: 700;
+  font-size: 14px;
+  flex: 1;
+  min-width: 0;
+}
+.session-list {
+  display: flex;
+  flex-direction: column;
+}
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 10px 40px;
+  border-top: 1px solid var(--border);
+  transition: background 0.14s ease;
+}
+.session-row:hover {
+  background: var(--surface-2);
+}
+.session-row-dragging {
+  opacity: 0.4;
+}
+.session-name {
+  font-size: 13.5px;
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.session-date {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+.unorganized-block {
+  display: flex;
+  flex-direction: column;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+.unorganized-block.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.unorganized-block .session-row {
+  padding-left: 14px;
+}
+.unorganized-block .session-row:first-child {
+  border-top: none;
+}
+.section-divider-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  margin: 4px 2px;
+}
+.rename-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- session selector (quizzes / flashcards) ---------- */
+.selector-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.selector-folder {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.selector-folder-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.selector-session-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px 9px 34px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+.selector-session-row:hover,
+.selector-folder-header:hover {
+  background: var(--surface-2);
+}
+.selector-standalone-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+}
+.selector-standalone-row:hover {
+  background: var(--surface-2);
+}
+.selector-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}

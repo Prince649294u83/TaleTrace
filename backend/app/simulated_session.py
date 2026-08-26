@@ -4,11 +4,16 @@
     python -m backend.app.simulated_session page.jpg              # one page, scripted reader
     python -m backend.app.simulated_session pages/ --minutes 15   # a folder, paced
     python -m backend.app.simulated_session page.jpg --realtime    # watch it happen
-    python -m backend.app.simulated_session page.jpg --offline     # no key, no network
+    python -m backend.app.simulated_session page.jpg --offline     # recorded OCR, no Vision call
 
 With no arguments it generates four synthetic pages, uses their recorded Vision
-responses and runs the whole chain — no API key, no dataset, no network. That is
-the one command someone new to the project can run to see the system work.
+responses and runs the whole chain — no OCR key, no dataset, no Vision call. That
+is the one command someone new to the project can run to see the system work.
+
+`--offline` is about OCR, and only OCR. The AI Engine follows its own key: with
+`GROQ_API_KEY_1` set, an offline run still explains the word the reader points at
+and still writes an end-of-session review, because that is two calls per session
+rather than one per frame. With no keys at all, nothing leaves the machine.
 
 The sibling of `live_session`, and deliberately a *thin* one. Both files build the
 same runtime and hand it to the same `DeviceLoop`; they differ in three arguments:
@@ -49,21 +54,31 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
 from backend.app.core.environment import load_environment
+from backend.app.modules.audio_engine.playback_engine import PlaybackEngine
+from backend.app.modules.audio_engine.speech_provider import get_provider
+from backend.app.modules.database.recording import (
+    READER_ID,
+    hydrate_reading_speed,
+    record_finished_session,
+)
 from backend.app.modules.image_receiver import VirtualCamera
 from backend.app.modules.image_receiver.virtual_buttons import ScriptedButtons
+from backend.app.modules.reading_engine.ai_bridge import bridge_for_session
 from backend.app.modules.reading_engine.device_loop import DeviceLoop
 from backend.app.modules.reading_engine.runtime import ReadingRuntime
+from backend.app.modules.reading_speed.service import ReadingSpeedService
 from backend.app.shared.clock import VirtualClock
+from backend.app.shared.groq_keys import AI_ENGINE_VARIABLE
 
 logger = logging.getLogger(__name__)
 
 SESSION_ID = "simulated-session"
-READER_ID = "simulated-reader"
 
 # Where `--target`-less runs put their generated pages. Under the cache directory
 # because they are derived data: deleting them costs one regeneration.
@@ -136,16 +151,33 @@ def build_session(
     session time needs the clock that measured it.
 
     `offline` swaps live Google Vision for the recorded responses under
-    `.taletrace_cache/vision/` and drops the Groq halves of the Merge Engine, so the
-    whole chain runs with no key and no network. Every other stage — the same
-    preprocessing, the same parser, the same word indices — is untouched, because
-    the cached bytes are keyed on exactly what the live provider would have been
-    sent. That mode is for stress and stability runs, where a five-hundred-image
-    sweep should not cost five hundred Vision calls to tell us the queue leaked.
-    An image with no recorded response raises rather than reading as a blank page.
+    `.taletrace_cache/vision/` and drops the Groq half of the Merge Engine, so no
+    per-frame call leaves the machine. Every other stage — the same preprocessing,
+    the same parser, the same word indices — is untouched, because the cached bytes
+    are keyed on exactly what the live provider would have been sent. That mode is
+    for stress and stability runs, where a five-hundred-image sweep should not cost
+    five hundred Vision calls to tell us the queue leaked. An image with no
+    recorded response raises rather than reading as a blank page.
+
+    It says nothing about `ai`, which the caller passes either way: the AI Engine
+    is one explain and one review per *session*, not per frame, so there is nothing
+    for a per-frame cost switch to save by turning it off.
+
+    `audio` takes three values, and the difference between two of them matters:
+    `None` builds a real `PlaybackEngine` (the default), an object is used as
+    given, and `False` asks for silent reading with no narration at all.
     """
 
     clock = VirtualClock(speed=speed)
+
+    # The reader's stored baseline, on the clock this session will measure with.
+    # Hydrated here rather than in `_run` because the clock is made here, and a
+    # service on the real clock inside a 60x session reports every wpm wrong by
+    # the speed factor. Offline only: `build_live` takes no clock, so its engine
+    # is on the real one and a virtual-clock service would disagree with it.
+    reading_speed = hydrate_reading_speed(
+        ReadingSpeedService(clock=clock.now) if offline else ReadingSpeedService()
+    )
 
     camera = VirtualCamera.streaming(
         images,
@@ -159,6 +191,35 @@ def build_session(
     )
     buttons = ScriptedButtons(script, clock=clock)
 
+    # A real PlaybackEngine, on the same virtual clock. `audio=None` reaches the
+    # engine as "no narration configured", which silently skips all eight of its
+    # audio call sites — the pause on Meaning Mode, the seek when a gesture moves
+    # the pointer, the queue refresh when Merge Memory accepts better text — so a
+    # session that proved the whole chain still proved nothing about narration.
+    #
+    # `fake` unless asked otherwise: it records what it was told to speak and
+    # touches neither the network nor a speaker, which is what makes a replay
+    # deterministic. `AUDIO_PROVIDER=edge` narrates out loud for real, which is
+    # worth doing with `--realtime` and pointless at 60x.
+    if audio is None:
+        audio = PlaybackEngine(
+            provider=get_provider(os.environ.get("AUDIO_PROVIDER") or "fake"),
+            session_id=SESSION_ID,
+            clock=clock.now,
+        )
+    elif audio is False:
+        # Silent reading, asked for on purpose. The engine's audio call sites all
+        # no-op on `None`, so that is what "no narration" looks like downstream —
+        # but it cannot be the *default*, which is the distinction this branch
+        # exists to keep: `None` means the caller did not choose and gets a real
+        # engine. Those two being the same value is what left every simulated
+        # session silent for a milestone.
+        #
+        # It is a real scenario, not just a test mode: a reader with TTS switched
+        # off measures their own pace, so `words_read` comes from the pointer
+        # instead of from what was spoken.
+        audio = None
+
     if offline:
         from backend.app.modules.ocr.vision_cache import CachedVisionProvider
 
@@ -168,6 +229,7 @@ def build_session(
             ocr_provider=CachedVisionProvider(),
             audio=audio,
             ai=ai,
+            speed=reading_speed,
             # `clock.now` rather than the clock object: `ReadingSpeedService` and
             # `ReadingEngine` take a plain `Callable[[], float]`, and passing the
             # virtual one is what keeps their elapsed times in the same world as
@@ -182,6 +244,7 @@ def build_session(
             reader_id=READER_ID,
             audio=audio,
             ai=ai,
+            speed=reading_speed,
         )
 
     loop = DeviceLoop(
@@ -228,7 +291,7 @@ async def _run(args: argparse.Namespace) -> int:
         images = collect_images(Path(args.target).expanduser(), limit=args.limit)
     else:
         # No target: generate pages and use their recorded responses. Forced
-        # offline, because the whole point is a run that needs no key — a live
+        # offline, because the whole point is a run that needs no OCR key — a live
         # Vision call on a generated page would also be a waste of a real quota
         # to read text we already know the answer to.
         images = ensure_synthetic_pages(limit=args.limit)
@@ -237,15 +300,41 @@ async def _run(args: argparse.Namespace) -> int:
     speed = 1.0 if args.realtime else args.speed
     seconds = args.minutes * 60.0
 
+    # The AI Engine follows its own key, not `--offline`. Offline is a *per-frame*
+    # cost switch — it exists so a five-hundred-image sweep does not cost five
+    # hundred Vision calls — and the AI Engine is not a per-frame cost: it answers
+    # one Meaning Mode press and writes one end-of-session review, so a scripted
+    # run makes two calls whether OCR came from the network or from disk. Tying it
+    # to `offline` would mean the only way to exercise the Meaning Mode chain was
+    # to pay for OCR on every tick of the session.
+    ai = bridge_for_session()
+
     print("TaleTrace — simulated session")
     print(f"  images      {len(images)}  ({images[0].name}"
           f"{f' … {images[-1].name}' if len(images) > 1 else ''})")
     print(f"  session     {seconds / 60:.0f} min of reading time")
     print(f"  clock       {'real time' if speed == 1.0 else f'{speed}x real per session second'}")
     print(f"  OCR         {'recorded Vision responses (offline)' if offline else 'Google Vision (live)'}")
+    print(
+        "  AI Engine   "
+        + (
+            "ready — Meaning Mode explains, the session ends with a summary"
+            if ai is not None
+            else f"off — {AI_ENGINE_VARIABLE} not set, so no explanations and no summary"
+        )
+    )
+    provider = os.environ.get("AUDIO_PROVIDER") or "fake"
+    print(
+        f"  narration   {provider}"
+        + (
+            " — records what it would say, no sound and no network"
+            if provider == "fake"
+            else " — speaks out loud (AUDIO_PROVIDER)"
+        )
+    )
     print()
 
-    loop, clock = build_session(images, speed=speed, offline=offline)
+    loop, clock = build_session(images, speed=speed, offline=offline, ai=ai)
 
     # Ticks, not seconds, because the loop counts ticks and each advances the
     # virtual clock by `tick_seconds`. This is the same arithmetic `live_session`
@@ -254,6 +343,17 @@ async def _run(args: argparse.Namespace) -> int:
 
     analytics = await loop.run(max_ticks=max_ticks)
 
+    # Written to the same table as a live session, and named so the difference is
+    # visible in the website's session list. Same table on purpose: a simulated
+    # run is how the read path gets exercised without hardware, and a separate
+    # table would mean the website's queries were never the ones under test.
+    row_id, note = record_finished_session(
+        loop.runtime.engine,
+        analytics,
+        name="Simulated Session",
+        source_reference=f"{len(images)} image(s) from {images[0].parent}",
+    )
+
     print()
     print(f"  session time    {clock.now():.1f}s over {clock.sleeps} ticks")
     print(f"  frames read     {loop.frames_processed}")
@@ -261,6 +361,22 @@ async def _run(args: argparse.Namespace) -> int:
     print(f"  events          {len(loop.events_published)}")
     print(f"  pages           {analytics.pages_read}")
     print(f"  words           {analytics.words_read}")
+
+    # Narration reported as sentences actually finished, not as "audio configured":
+    # a queue that was built and never spoken, or one paused by Meaning Mode and
+    # never resumed, both read as a working session everywhere else in this output.
+    spoken = loop.runtime.engine.audio.final_statistics
+    if spoken is not None:
+        print(
+            f"  narrated        {spoken.sentences_spoken} sentences, "
+            f"{spoken.words_spoken} words"
+        )
+        print(
+            f"  narration held  {spoken.meaning_mode_count} for Meaning Mode, "
+            f"{spoken.pause_count} pauses, {spoken.queue_refreshes} queue refreshes"
+        )
+
+    print(f"  session         {row_id or note}")
     return 0
 
 
@@ -272,7 +388,7 @@ def main(argv: list[str] | None = None) -> int:
         "target",
         nargs="?",
         help="an image, or a directory of images to feed one page at a time. "
-        "Omit it to generate synthetic pages and run with no key and no network.",
+        "Omit it to generate synthetic pages and read them with no OCR key.",
     )
     parser.add_argument(
         "--minutes",
@@ -294,7 +410,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--offline",
         action="store_true",
-        help="replay adapter instead of Google Vision, and no Groq: no key, no network",
+        help="replay adapter instead of Google Vision: no OCR key, no OCR network. "
+        "Says nothing about the AI Engine, which follows its own key",
     )
     parser.add_argument(
         "--limit",

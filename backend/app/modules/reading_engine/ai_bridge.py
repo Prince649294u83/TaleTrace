@@ -48,6 +48,7 @@ from backend.app.modules.ai_engine.models import (
     ReadingContext,
     ReadingMode,
 )
+from backend.app.shared.groq_keys import ai_engine_key
 
 logger = logging.getLogger(__name__)
 
@@ -271,3 +272,26 @@ class AiBridge:
             return AiOutcome(capability=capability, ok=False, data=data, error=error)
 
         return AiOutcome(capability=capability, ok=True, data=data)
+
+
+def bridge_for_session() -> AiBridge | None:
+    """The session's AI Engine, or `None` when `GROQ_API_KEY_1` is absent.
+
+    The one place a running session gets a bridge, so the rig and the simulator
+    cannot disagree about how the AI Engine is attached — they disagreed by
+    omission for a while, both leaving `ai` unset, which made `meaning_mode_on`
+    skip `explain()` and `finish_session` skip `review()`. The consequence was a
+    reader whose Meaning Mode press did nothing and a website whose AI Summary
+    was empty on every session, with no error anywhere: both call sites guard on
+    `self.ai is not None`, so an absent engine looks exactly like a session with
+    nothing to say.
+
+    `None` rather than a keyless bridge, because a bridge with no key spends the
+    reader's pause failing three calls in series before saying so. Absence is
+    reported once, by the runner, before the session starts.
+
+    No `BookMetadata`: a live session does not know what book is in front of the
+    camera. The demo passes one because it chose the book.
+    """
+
+    return AiBridge() if ai_engine_key() else None

@@ -1424,3 +1424,64 @@ class TestRefreshAfterQueueRanDry:
         await asyncio.sleep(0.05)
 
         assert engine.get_status().state is PlaybackState.PAUSED
+
+
+class TestRefreshKeepsTheSentenceTheReaderIsOn:
+    """A refresh with nothing being spoken must not drop the anchor sentence.
+
+    Found by `backend/app/simulated_session.py` on a real page: the reading
+    engine starts playback before Merge Memory has any text, so every sentence
+    the reader hears arrives by refresh — with nothing in flight and the anchor
+    sitting on a sentence that has not been spoken. `replace_after` is exclusive,
+    so each refresh dropped exactly that sentence, and an OCR paragraph that
+    segments to one sentence was dropped whole. A session narrated nothing while
+    reporting 55 successful queue refreshes.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_refresh_before_anything_is_spoken_keeps_the_first_sentence(self):
+        engine = build_engine()
+        # What `ReadingEngine.start_session` does: playback starts before Merge
+        # Memory has produced any text for the page.
+        await engine.start(pointer=ReadingPointer(page_index=1), text="")
+        assert engine.get_status().state is PlaybackState.FINISHED
+
+        await engine.refresh_queue(text=THREE_SENTENCES)
+        await engine.wait_for_idle()
+
+        status = engine.get_status()
+        assert engine._provider.spoken[0] == "First sentence."
+        assert status.statistics.sentences_spoken == 3
+        assert status.queued_sentences == 0
+
+    @pytest.mark.asyncio
+    async def test_a_single_sentence_paragraph_is_not_dropped_whole(self):
+        """The real-page case: one refresh, one sentence, nothing spoken."""
+
+        engine = build_engine()
+        await engine.start(pointer=ReadingPointer(page_index=1), text="")
+        await engine.refresh_queue(text="A whole paragraph on one line.")
+        await engine.wait_for_idle()
+
+        assert engine._provider.spoken == ["A whole paragraph on one line."]
+
+    @pytest.mark.asyncio
+    async def test_the_sentence_being_spoken_is_still_never_re_spoken(self):
+        """The other side of the same branch, which is why it is a branch.
+
+        With a sentence genuinely in flight the anchor is already out of the
+        queue, and including it would make the reader hear it twice. Needs
+        `BlockingProvider`: with the fake one the loop has finished the sentence
+        and cleared `_current` by the time a test can look.
+        """
+
+        provider = BlockingProvider()
+        engine = build_engine(provider=provider)
+        await engine.start(pointer=ReadingPointer(), text=THREE_SENTENCES, profile=FAST)
+        await provider.wait_until_speaking()
+
+        await engine.refresh_queue(text=THREE_SENTENCES)
+        provider.release()
+        await engine.wait_for_idle()
+
+        assert provider.spoken.count("First sentence.") == 1

@@ -581,17 +581,139 @@ class TestSessionAnalytics:
         )
         return ProgressSnapshot(**{**base, **overrides})
 
-    def test_ingests_playback_statistics_when_tts_was_on(self):
+    def test_narration_does_not_redefine_words_read(self):
+        """The audio engine's spoken count is not the reader's reading progress.
+
+        `words_spoken` counts what TTS said out loud, and TTS speaks from the
+        pointer — which only advances when a gesture selects a word. So a reader
+        who listened through a page while pointing twice had two words spoken.
+        Preferring that number reported an hour-long narrated session as ten
+        words read, which is the defect this test pins shut.
+        """
+
         playback = PlaybackStatistics(
             words_spoken=900, reading_time_ms=270_000, playback_time_ms=350_000, pages_read=3
         )
         summary = summarize_session(
             self._snapshot(), measured(200.0), observations=[], playback=playback
         )
-        # The audio engine counted words while speaking them; that beats inference.
-        assert summary.words_read == 900
-        assert summary.reading_duration_ms == 270_000
+        assert summary.words_read == 1_000  # the tracker's progress, not 900
+        assert summary.reading_duration_ms == 300_000  # the reader's clock, not 270_000
         assert summary.tts_assisted
+
+    def test_narrated_and_silent_agree_on_identical_progress(self):
+        """The acceptance criterion, and it holds by construction.
+
+        Both paths read `words_confirmed`, which is `content.words_before(pointer)`,
+        and narration never moves the pointer — so the same progress cannot produce
+        two different counts however loudly one of the sessions was read.
+        """
+
+        snapshot = self._snapshot()
+        narrated = summarize_session(
+            snapshot,
+            measured(200.0),
+            observations=[],
+            playback=PlaybackStatistics(
+                words_spoken=17, reading_time_ms=9_000, playback_time_ms=11_000, pages_read=1
+            ),
+        )
+        silent = summarize_session(snapshot, measured(200.0), observations=[])
+
+        assert narrated.words_read == silent.words_read
+        assert narrated.reading_duration_ms == silent.reading_duration_ms
+        assert narrated.session_wpm == silent.session_wpm
+        assert narrated.pages_read == silent.pages_read
+        # The only field narration is allowed to move.
+        assert narrated.tts_assisted and not silent.tts_assisted
+
+    def test_playback_statistics_survive_as_their_own_measurement(self):
+        """Removed from the reading-speed chain, not removed from the system.
+
+        Sentences and words spoken are how the Audio Engine is judged — a queue
+        built and never spoken reads as a working session everywhere else. The fix
+        stops analytics *sourcing* from them; it must not make them unavailable.
+        """
+
+        playback = PlaybackStatistics(
+            sentences_spoken=27, words_spoken=900, reading_time_ms=270_000, pages_read=3
+        )
+        summary = summarize_session(
+            self._snapshot(), measured(200.0), observations=[], playback=playback
+        )
+        assert summary.words_read != playback.words_spoken
+        assert playback.words_spoken == 900
+        assert playback.sentences_spoken == 27
+
+    def test_a_long_narrated_session_reports_the_words_it_covered(self):
+        """An hour of listening with four gestures is not a four-word session.
+
+        The reported symptom, at the reported scale: sixty minutes, a whole book's
+        worth of pointer progress, and almost no narration to show for it because
+        the reader barely touched the page.
+        """
+
+        summary = summarize_session(
+            self._snapshot(
+                elapsed_reading_ms=3_600_000,
+                elapsed_wall_ms=3_700_000,
+                words_confirmed=12_000,
+            ),
+            measured(200.0),
+            observations=[],
+            playback=PlaybackStatistics(
+                words_spoken=10, reading_time_ms=4_000, playback_time_ms=4_000, pages_read=1
+            ),
+        )
+        assert summary.words_read == 12_000
+        assert summary.session_wpm == 200.0
+
+    def test_a_partially_narrated_page_still_reports_the_whole_page(self):
+        """TTS stopping mid-page says nothing about where the reader stopped.
+
+        Meaning Mode pauses narration, a gesture seeks it, and a session can end
+        with the queue half-spoken. The reader still read what they read.
+        """
+
+        observations = [PageObservation(page_index=1, words=420, reading_ms=126_000)]
+        summary = summarize_session(
+            self._snapshot(words_confirmed=420, elapsed_reading_ms=126_000),
+            measured(200.0),
+            observations=observations,
+            playback=PlaybackStatistics(
+                words_spoken=95, reading_time_ms=28_000, playback_time_ms=30_000, pages_read=1
+            ),
+        )
+        assert summary.words_read == 420
+        assert summary.pages_read == 1
+
+    def test_observations_still_backstop_an_unadvanced_snapshot(self):
+        """The one fallback the old branch got right, kept.
+
+        A session whose pages were all recorded but whose snapshot never advanced
+        reports the words it covered rather than zero — and narration must not be
+        what rescues it, or the silent path is left broken.
+        """
+
+        observations = [
+            PageObservation(page_index=1, words=180, reading_ms=54_000),
+            PageObservation(page_index=2, words=200, reading_ms=60_000),
+        ]
+        for playback in (
+            None,
+            PlaybackStatistics(words_spoken=7, reading_time_ms=2_000, pages_read=1),
+        ):
+            summary = summarize_session(
+                self._snapshot(
+                    elapsed_reading_ms=0, elapsed_wall_ms=0, words_confirmed=0
+                ),
+                measured(200.0),
+                observations=observations,
+                playback=playback,
+            )
+            assert summary.words_read == 380
+            assert summary.reading_duration_ms == 114_000
+            assert summary.pages_read == 2
 
     def test_silent_reading_uses_the_tracker(self):
         summary = summarize_session(self._snapshot(), measured(200.0), observations=[])

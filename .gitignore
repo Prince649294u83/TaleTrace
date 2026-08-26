@@ -32,3 +32,10 @@ backend/app/OCRandGESTURE/Gesture/
 # `_enhance`. Committing them would also put page text from someone's book in
 # the history.
 .taletrace_cache/
+.gstack/
+
+# Knowledge-graph output from the graphify tool. Derived from the source that is
+# already in this repo, and not portable: `.graphify_ast.json` alone is 5MB of
+# generated AST, and `.graphify_python` records an absolute path to one machine's
+# interpreter, which is wrong for everybody else who clones this.
+graphify-out/

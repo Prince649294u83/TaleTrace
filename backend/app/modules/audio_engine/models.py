@@ -162,12 +162,22 @@ class SpeechResponse(BaseModel):
 
 
 class PlaybackStatistics(BaseModel):
-    """Analytics for one playback session.
+    """Analytics for one playback session. Narration, not the reader.
 
-    Two clocks, deliberately. `reading_time_ms` excludes every paused interval,
-    so Meaning Mode does not inflate reading speed; `playback_time_ms` is wall
-    time since playback began. `average_wpm` derives from reading time, the only
-    one that reflects actual pace.
+    Every field counts what the TTS engine did: sentences and words it spoke,
+    pages it spoke them from, milliseconds it spent speaking. None of it
+    measures reading progress — narration follows the pointer and never moves
+    it, so what was spoken and what was covered are different quantities.
+
+    Two clocks, deliberately. `reading_time_ms` is speaking time with paused
+    intervals removed, so Meaning Mode does not deflate `average_wpm`;
+    `playback_time_ms` is wall time since playback began.
+
+    Neither is `SessionAnalytics.reading_duration_ms`. That is the *reader's*
+    reading clock and comes from `ProgressSnapshot`. `reading_time_ms` is the
+    tempting field and the wrong one: sourcing Reading Speed from it is the
+    defect that made a narrated hour report ten words read, and the guard
+    against its return lives in `tests/test_reading_speed.py`.
 
     A sentence is counted once it finishes uninterrupted. One cut off by a pause
     is requeued and spoken again, so counting at synthesis time would double it.

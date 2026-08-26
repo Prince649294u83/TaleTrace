@@ -372,9 +372,11 @@ class PlaybackEngine:
     ) -> bool:
         """Reload pending sentences after a Merge Memory update.
 
-        `text` is the whole current paragraph as Merge Memory now has it. The
-        sentence in flight is already dequeued, so it is never disturbed — only
-        what comes after it is rewritten.
+        `text` is the whole current paragraph as Merge Memory now has it. A
+        sentence being spoken is already dequeued, so it is never disturbed — only
+        what comes after it is rewritten. With nothing being spoken the anchor is
+        merely where the reader is, and that sentence is rewritten too, because it
+        has not been heard yet.
 
         `source_version` is Merge Memory's own version for this text. Supply it
         and out-of-order refreshes are rejected: OCR frames travel over HTTP and
@@ -410,8 +412,30 @@ class PlaybackEngine:
                     rate=self._profile.rate,
                 )
 
+            # A sentence is in flight only while one is actually being spoken.
+            # `_current` alone is not that test: `pause()` pushes the interrupted
+            # sentence back to the head of the queue and leaves `_current` set, so
+            # a refresh arriving during a Meaning Mode hold would read a *queued*
+            # sentence as in flight.
+            in_flight = self._current is not None and self._machine.state in (
+                PlaybackState.PLAYING,
+                PlaybackState.WAITING_FOR_POINTER,
+            )
+
             before = self._queue.version
-            self._queue.replace_after(anchor, sentences)
+            if in_flight:
+                # Already dequeued and being spoken, so the rewrite starts after
+                # it and never restarts what the reader is hearing.
+                self._queue.replace_after(anchor, sentences)
+            else:
+                # Nothing in flight: the anchor is where the reader *is*, and that
+                # sentence has not been spoken. `replace_after` is exclusive, so
+                # using it here silently discards it — and a paragraph that
+                # segments to a single sentence is discarded entirely, which is
+                # most refreshes on a real OCR page. Replace-then-drop is the same
+                # inclusive idiom `seek` and `start` already use.
+                self._queue.replace(sentences)
+                self._queue.drop_before(anchor)
             if source_version is not None:
                 self._source_version = source_version
 
@@ -419,6 +443,7 @@ class PlaybackEngine:
             self._log(
                 "queue_refreshed",
                 anchor=anchor.sentence_order_key(),
+                anchor_in_flight=in_flight,
                 pending=self._queue.size(),
                 queue_version=f"{before} -> {self._queue.version}",
                 source_version=source_version,

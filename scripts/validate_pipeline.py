@@ -1002,11 +1002,10 @@ async def run(args: argparse.Namespace) -> int:
         # moment one keeps counting through something the other excludes — which
         # is the failure this exists to catch, and it would be worth seconds.
         #
-        # Compared against the *tracker's* clock, not `analytics.reading_duration_ms`.
-        # When TTS ran, `_totals` prefers the Audio Engine's `reading_time_ms`,
-        # which counts time spent speaking rather than time spent reading; the two
-        # are different quantities and only one of them is what focus measures.
-        # The tracker survives `finish_session` precisely so it can still be read.
+        # Compared against the *tracker's* clock rather than reading it off
+        # `analytics.reading_duration_ms`, so the check still holds if analytics
+        # ever stops sourcing that field from the snapshot. The tracker survives
+        # `finish_session` precisely so it can still be read.
         final = speed.tracker(SESSION_ID).snapshot()
         observed_ms = sum(p.actual_ms for p in focus.paragraphs)
         report.field("reading clock (focus)", observed_ms)

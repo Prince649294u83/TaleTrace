@@ -91,9 +91,8 @@ class LiveNarration:
         self.provider = AnnouncingProvider(FakeSpeechProvider(), self.sink)
         # The same clock the sink sleeps on and Reading Speed measures. Left on
         # `time.monotonic` the engine times a 10x-compressed run against real
-        # seconds, and because `summarize_session` prefers playback's reading
-        # time whenever TTS is on, the closing summary divides the full word
-        # count by a tenth of the elapsed time and reports a 700 wpm reader.
+        # seconds, so its narration statistics — sentences and words spoken, the
+        # pace this rehearsal exists to show — are all out by the speed factor.
         self.tts = PlaybackEngine(
             provider=self.provider,
             sink=self.sink,
