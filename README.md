@@ -17,12 +17,19 @@ ESP32 buttons ──────┘                  └─► Gesture ─► Re
                                                        └─► Focus Analytics
 ```
 
+Joining the project — human or AI? Read [AGENTS.md](AGENTS.md) first. It is the
+handoff: the rules that cannot be broken, the invariants that look like bugs but
+are not, what to build next, and the traps that have already cost somebody an
+afternoon.
+
 ---
 
-## The one command
+## Two commands
 
-If you have just cloned this and want to see it work, this is the whole thing.
-No hardware, no API key, no dataset, no network:
+There are only two commands anybody needs on day one. Neither needs hardware, an
+API key, a dataset or a network.
+
+**See the reading engine work:**
 
 ```bash
 python -m venv .venv
@@ -49,7 +56,21 @@ TaleTrace — simulated session
   words           192
 ```
 
-Everything below is detail on that, on the real hardware, and on the harnesses.
+**See the website:**
+
+```bash
+python scripts/dev.py
+```
+
+One command, both servers — FastAPI on `127.0.0.1:8000` and the React dev server
+on `localhost:5173` — with both logs in this terminal and both stopped by one
+Ctrl-C. Open the URL it prints and log in as `demo@taletrace.app` / `demo1234`.
+The charts you see are real reading sessions out of `taletrace.db`, which is
+committed to this repo. Details in §2.4; it needs Node.js, which the reading
+engine does not.
+
+Everything below is detail on those two, on the real hardware, and on the
+harnesses.
 
 ---
 
@@ -62,6 +83,7 @@ Everything below is detail on that, on the real hardware, and on the harnesses.
 | Python | **3.12** (3.12.10 is what this is developed on) | 3.13 has no `mediapipe` wheel for the pinned version |
 | pip | any recent | |
 | Git | any | |
+| Node.js | **20+** | only for the website (`scripts/dev.py`, `npm run dev`). The reading engine needs none of it. |
 | Google Cloud Vision API key | — | only for live OCR; every offline command runs without it |
 | Groq API keys (×2) | — | only for text reconstruction and Meaning Mode |
 | ESP32-CAM + ESP32 DevKit | — | only for a live session |
@@ -138,9 +160,19 @@ down.
 python -m pytest -q
 ```
 
-Expected: **658 passed**. No API key, no network and no hardware are required —
+Expected: **703 passed**. No API key, no network and no hardware are required —
 if this does not pass on a clean checkout, stop here, because nothing further
 will make sense.
+
+The website has its own small suite, which needs Node.js:
+
+```bash
+cd frontend && npm install && npm test
+```
+
+Expected: **7 passed**. It covers the one thing that is easy to get silently
+wrong — that the Analysis page's numbers come from the server and there is no
+local fallback left to quietly replace them. See §2.4.
 
 ---
 
@@ -197,26 +229,17 @@ one. The only differences are three constructor arguments:
 Nothing downstream is told which it got. That is what makes a simulated session
 evidence about a real one rather than a separate thing that resembles it.
 
-### 2.2 Live session — with the rig
+### 2.2 Test the hardware first
+
+Before any real session, ask the rig what it can do. This is the command to run
+first, every time — it prints and exits, starts nothing, reads nothing, and
+costs nothing:
 
 ```bash
-# what can the rig do right now? Prints and exits; starts nothing.
 python -m backend.app.live_session --check
-
-# a full session, until Ctrl-C
-python -m backend.app.live_session
-
-# stop after two minutes
-python -m backend.app.live_session --seconds 120
-
-# real camera, scheduled reader instead of real buttons
-python -m backend.app.live_session --buttons virtual
-
-# never substitute: trust the wiring even if the probe fails
-python -m backend.app.live_session --buttons hardware
 ```
 
-`--check` output, on a machine with keys but no rig plugged in:
+Output, on a machine with keys but no rig plugged in:
 
 ```
 TaleTrace — live session
@@ -234,9 +257,102 @@ exits `0` when every row is OK and `1` otherwise, so it works in CI.
 
 Each row is probed for **reached**, not merely configured. A URL pointing at a
 device that is powered off is the most common failure and it looks exactly like
-a correct configuration until a frame is asked for.
+a correct configuration until a frame is asked for. Keys are reported present or
+absent and never printed.
 
-### 2.3 The API server
+Fix every `FAIL` you intend to use before going on. §3 covers the wiring and §7
+lists what each failure means.
+
+### 2.3 Live session — with the rig
+
+```bash
+# a full session, until Ctrl-C
+python -m backend.app.live_session
+
+# stop after two minutes
+python -m backend.app.live_session --seconds 120
+
+# real camera, scheduled reader instead of real buttons
+python -m backend.app.live_session --buttons virtual
+
+# never substitute: trust the wiring even if the probe fails
+python -m backend.app.live_session --buttons hardware
+```
+
+Every finished session — live or simulated — writes one row to `taletrace.db`,
+which is what the website reads. Nothing else writes reading history.
+
+### 2.4 The website
+
+```bash
+python scripts/dev.py
+```
+
+That is the whole command. It starts the backend and the React dev server, keeps
+both logs in one terminal, and stops both on Ctrl-C — including when one of them
+dies on its own, which is the case two terminals handle worst. On the first run
+it installs the frontend's dependencies for you. If port 8000 is already busy it
+says so and stops, instead of leaving you with a website whose every request
+fails against yesterday's backend.
+
+Open the `Local:` URL Vite prints (normally `http://localhost:5173`) and log in:
+
+```
+demo@taletrace.app / demo1234
+```
+
+Two terminals, if you prefer them:
+
+```bash
+python -m uvicorn backend.app.main:app --reload    # terminal 1
+cd frontend && npm run dev                          # terminal 2
+```
+
+**What the website is.** A companion, not a reader. There is no "start reading"
+button anywhere, because reading happens on the rig — the website shows what the
+rig produced: the device's live status, today's pages and lookups, every past
+session with its true reading time and difficulty, the AI summary, and the
+Analysis charts.
+
+**Where its numbers come from.** `sessions` rows in `taletrace.db`, written by
+`live_session` and `simulated_session`. The Analysis page aggregates them per
+calendar day — reading time, pages, meaning lookups, the pace trend and the
+difficulty trend — with the same four filters the page has always had (Today,
+Last 7 Days, Last 30 Days, All Time). Nothing is recomputed: the pace is the
+persisted `session_wpm`, the words are the persisted `words_read`, the difficulty
+is the persisted verdict. If the backend is down the page shows its error state;
+it never falls back to invented figures.
+
+**The seeded history.** `taletrace.db` is committed, and the twelve sessions in
+it are a deterministic corpus so everyone's charts look the same and all four
+time filters have something to select:
+
+```bash
+python scripts/seed_history.py --list       # what is in the database right now
+python scripts/seed_history.py              # refresh the seeded rows, keep real ones
+python scripts/seed_history.py --reset      # delete EVERY session, then seed
+```
+
+Every seeded row carries `source_reference = "seed:reading-history"`, which is
+the only way they are ever found — there is no "ignore small sessions" rule
+anywhere, because a page read at breakfast is small too. Their numbers are not
+typed in: each entry says how the reading went and the row is then produced by
+the same `summarize_session` a real session uses, so the corpus also fails
+loudly if the measurement chain ever changes. Both commands back the database up
+to `.taletrace_cache/` first. `--reset` deletes your own sessions too.
+
+Three quirks worth knowing:
+
+- Accounts are still in the browser's `localStorage`. There is no authentication
+  server-side and the backend holds exactly one reader, so the login is a front
+  door, not a security boundary. Nothing here should be exposed to a network.
+- Quizzes and Flashcards still use sample banks. The real data is already being
+  persisted per session (`review_payload`); the endpoint that merges several
+  sessions is not built yet.
+- `frontend/src/services/api.js` is the only file that talks to the backend.
+  Pages and components read it and nothing else.
+
+### 2.5 The API server
 
 ```bash
 uvicorn backend.app.main:app --reload
@@ -251,6 +367,19 @@ through it.
 
 ```
 GET    /health
+
+# the website's own API — everything under /api. Plain JSON, no envelope.
+GET    /api/me                   PATCH  /api/me
+GET    /api/device/status
+GET    /api/dashboard
+GET    /api/analysis?range=today|week|month|all
+GET    /api/reading-test         POST   /api/reading-test
+POST   /api/reading-speed/preset
+GET    /api/sessions
+GET    /api/sessions/{id}        PATCH  /api/sessions/{id}
+DELETE /api/sessions/{id}
+POST   /api/folders              PATCH  /api/folders/{id}
+DELETE /api/folders/{id}
 
 POST   /upload_frame
 POST   /ocr/process
@@ -540,6 +669,7 @@ backend/app/
   live_session.py          production entry point — the rig
   simulated_session.py     the same runtime, virtual devices
   main.py                  FastAPI app
+  api/companion.py         the website's API — /api/*, plain JSON, no arithmetic
   core/                    settings, environment loading, logging
   shared/                  clock, events, constants, Groq key routing
   modules/
@@ -556,15 +686,25 @@ backend/app/
     reading_speed/         calibration, baselines, predictions
     focus_analytics/       Reading Focus Analysis Engine
     session/               session lifecycle
-    database/             (not in use yet)
+    database/              models, recording.py (one finished session → one row),
+                           analysis.py (rows → the five Analysis charts)
   OCRandGESTURE/           the reference implementation + ESP32 sketches
-scripts/                   the harnesses in §5
-tests/                     658 tests
+frontend/                  the website (React + Vite)
+  src/services/api.js      the only file that talks to the backend
+  src/services/mockBackend.js  what is still faked: accounts, quizzes, flashcards
+scripts/                   the harnesses in §5, plus dev.py and seed_history.py
+tests/                     703 tests
 docs/                      architecture, module contracts, verification
-.taletrace_cache/          OCR responses and generated pages (derived; deletable)
+taletrace.db               the reading history — committed on purpose (§2.4)
+.taletrace_cache/          OCR responses, generated pages, database backups
+                           (derived; deletable)
 ```
 
 ### 6.1 Two things worth knowing before changing code
+
+[AGENTS.md](AGENTS.md) has the full list — sentinel values, the two Groq keys,
+the timezone handling, the ordered roadmap. These two are the ones most often
+got wrong.
 
 **Reading Focus Analysis is not distraction detection.** It never answers "was
 the reader distracted?" — it answers "which sections required more attention
@@ -598,6 +738,14 @@ are read, not run.
 | `UnicodeEncodeError` in a terminal | cp1252 console | Both entry points force UTF-8; if you hit this elsewhere, `set PYTHONUTF8=1`. |
 | An offline command says an image has no cached response | never OCR'd | Run it once online, or use `scripts.synthetic_page`. |
 | Tests hang | ran bare `pytest` from a directory that ignores `pytest.ini` | Run `python -m pytest -q` from the repo root. |
+| `scripts/dev.py` says something is already listening on 8000 | a backend from an earlier run | `netstat -ano \| findstr :8000` then `taskkill /F /PID <pid>`; `lsof -ti :8000 \| xargs kill` on Unix. |
+| `scripts/dev.py` says npm was not found | no Node.js | Install Node 20+, or run the backend alone with `python -m uvicorn backend.app.main:app --reload`. |
+| Vite starts on 5174 or higher | 5173 is taken by another dev server | Nothing to fix — open the URL Vite prints. Its `/api` proxy follows it. |
+| Every page on the website shows its error state | the backend is not running | Start it. There is no offline fallback by design — invented figures on screen are worse than an error. |
+| The website loads but Analysis is empty | no sessions in `taletrace.db` for that range | Try All Time; then `python scripts/seed_history.py`. §2.4. |
+| Analysis has bars but a gap in the pace or difficulty line | that day had nothing measurable | Working as intended: a session too short to time reports no pace, and an unrated page reports no difficulty. A gap is true; a zero would not be. |
+| Login fails with the demo password | `localStorage` was cleared, or a different browser profile | Sign up again — accounts are per-browser (§2.4). |
+| `taletrace.db` conflicts on `git pull` | it is a binary and two people changed it | Take either side, then `python scripts/seed_history.py --reset`. Never resolve it by hand. |
 
 ---
 
@@ -612,14 +760,16 @@ python -m venv .venv
 pip install -r requirements.txt
 cp .env.example .env
 
-# ── the one command ──────────────────────────────────────────────────────────
-python -m backend.app.simulated_session
+# ── the two commands ─────────────────────────────────────────────────────────
+python -m backend.app.simulated_session               # the reading engine
+python scripts/dev.py                                 # the website: both servers
 
 # ── tests ────────────────────────────────────────────────────────────────────
-python -m pytest -q                                   # all 658
+python -m pytest -q                                   # all 703
 python -m pytest -q tests/test_device_integration.py   # one file
 python -m pytest -q -k DeviceDetection                 # one class
 python -m pytest -q -x -vv                             # stop at first failure, verbose
+cd frontend && npm test                                # the website's 7
 
 # ── sessions ─────────────────────────────────────────────────────────────────
 python -m backend.app.simulated_session                          # synthetic, offline
@@ -627,7 +777,7 @@ python -m backend.app.simulated_session pages/ --minutes 15
 python -m backend.app.simulated_session page.jpg --realtime
 python -m backend.app.simulated_session pages/ --offline --limit 3
 
-python -m backend.app.live_session --check                       # probe and exit
+python -m backend.app.live_session --check                       # probe and exit — run this FIRST
 python -m backend.app.live_session                               # until Ctrl-C
 python -m backend.app.live_session --seconds 120
 python -m backend.app.live_session --buttons virtual             # real cam, scheduled reader
@@ -635,6 +785,19 @@ python -m backend.app.live_session --buttons hardware            # never substit
 
 # ── API ──────────────────────────────────────────────────────────────────────
 uvicorn backend.app.main:app --reload                            # /docs for the schema
+curl "http://127.0.0.1:8000/api/analysis?range=week"             # what Analysis draws
+
+# ── the website ──────────────────────────────────────────────────────────────
+python scripts/dev.py                                            # both servers, one Ctrl-C
+cd frontend && npm run dev                                       # frontend alone
+cd frontend && npm test                                          # its tests
+cd frontend && npm run lint
+cd frontend && npm run build                                     # production bundle
+
+# ── the database ─────────────────────────────────────────────────────────────
+python scripts/seed_history.py --list                            # what is in there
+python scripts/seed_history.py                                   # refresh seeded rows
+python scripts/seed_history.py --reset                           # wipe all, then seed
 
 # ── verification ─────────────────────────────────────────────────────────────
 python -m scripts.verify_all

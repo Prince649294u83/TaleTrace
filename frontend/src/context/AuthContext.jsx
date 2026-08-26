@@ -8,10 +8,17 @@ export function AuthProvider({ children }) {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    api.getMe().then((u) => {
-      setUser(u);
-      setChecking(false);
-    });
+    api
+      .getMe()
+      .then(setUser)
+      // A rejection here is the backend being unreachable — `getMe` reads the
+      // account from localStorage and the reading profile from the server. Left
+      // uncaught, `checking` stays true and the whole app sits on "Loading
+      // TaleTrace…" with no error and no way out. Signed out is the honest
+      // outcome: the route guards send you to /login, and the login attempt then
+      // fails with the server's own message.
+      .catch(() => setUser(null))
+      .finally(() => setChecking(false));
   }, []);
 
   const login = useCallback(async (credentials) => {

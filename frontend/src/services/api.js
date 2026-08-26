@@ -8,12 +8,11 @@
 // Two sources, on purpose
 // -----------------------
 //   fetch()  →  everything the ESP32 rig produced or the reading engine
-//               measured: sessions, folders, the reading-speed baseline,
-//               whether the device is on the network.
+//               measured: sessions, folders, the reading-speed baseline, the
+//               analysis charts, whether the device is on the network.
 //   mock     →  accounts, and the pages whose backend does not exist yet:
-//               Analysis (needs multi-day history), Quizzes and Flashcards
-//               (the data is being persisted per session, but the endpoint that
-//               merges several sessions is not built).
+//               Quizzes and Flashcards (the data is being persisted per session,
+//               but the endpoint that merges several sessions is not built).
 //
 // Accounts stay in localStorage because there is no authentication server-side —
 // no password ever leaves the browser, and the backend holds exactly one reader.
@@ -65,11 +64,36 @@ async function request(path, { method = 'GET', body } = {}) {
 // to real data cannot be spotted by its date column.
 const DATE_FORMAT = { day: '2-digit', month: 'short', year: 'numeric' };
 const TIME_FORMAT = { hour: 'numeric', minute: '2-digit' };
+// The charts' x-axis: "Aug 26". Short because a 30-day bar chart has to fit
+// thirty of them across a card.
+const DAY_FORMAT = { month: 'short', day: 'numeric' };
 
 const asDate = (ms) => new Date(ms).toLocaleDateString('en-US', DATE_FORMAT);
 const asTime = (ms) => new Date(ms).toLocaleTimeString('en-US', TIME_FORMAT);
+const asDay = (ms) => new Date(ms).toLocaleDateString('en-US', DAY_FORMAT);
 
 const withDate = (session) => ({ ...session, date: asDate(session.createdAt) });
+
+// The five series the Analysis page draws. Each arrives as points carrying a
+// `dayStartMs` — the reader's local midnight — and every chart's x-axis reads
+// `date`, so the label is added here rather than five times over.
+const ANALYSIS_SERIES = [
+  'readingTimePerDay',
+  'pagesPerDay',
+  'lookupsPerDay',
+  'speedTrend',
+  'difficultyTrend',
+];
+
+const withDayLabels = (analysis) => ({
+  ...analysis,
+  ...Object.fromEntries(
+    ANALYSIS_SERIES.map((key) => [
+      key,
+      analysis[key].map(({ dayStartMs, ...point }) => ({ date: asDay(dayStartMs), ...point })),
+    ]),
+  ),
+});
 
 // The reading profile lives on the server; the account lives in localStorage.
 // Merged rather than replaced so a brand-new signup keeps its own
@@ -145,8 +169,17 @@ export const api = {
   // --------------------------------------------------------- dashboard / analysis
   getDashboard: () => request('/dashboard'),
 
-  // Still mock: the charts need weeks of history, and there is one day of it.
-  getAnalysis: mock.apiGetAnalysis,
+  // Real sessions, aggregated per calendar day by the backend. No mock fallback:
+  // if this throws, the page shows <ErrorState> and the reader learns the server
+  // is down. Quietly serving `mockBackend`'s randomised history instead would put
+  // invented reading figures on screen that look exactly like measured ones.
+  //
+  // `empty: true` comes back for a range with no reading in it, and the arrays are
+  // present but empty — the page checks the flag first.
+  getAnalysis: async (_userId, range) => {
+    const analysis = await request(`/analysis?range=${encodeURIComponent(range)}`);
+    return analysis.empty ? analysis : withDayLabels(analysis);
+  },
 
   // ----------------------------------------------------------- sessions / folders
   getSessions: async () => {

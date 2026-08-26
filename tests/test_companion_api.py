@@ -4,7 +4,7 @@ No hardware, no network, no AI. Every test writes a session row the way
 `live_session` does and then reads it back the way the website does, because the
 mistakes worth catching here are all mistranslations between those two ends.
 
-Four claims, one per mistake that would be invisible on screen:
+The claims, one per mistake that would be invisible on screen:
 
   * an implausible reading-test timing is refused, not clamped — a stopwatch left
     running would otherwise become a permanent wrong baseline that every later
@@ -15,7 +15,10 @@ Four claims, one per mistake that would be invisible on screen:
   * a session read without Meaning Mode has no summary and still loads — the AI
     Engine refuses to summarise nothing, which is correct, and must not read as a
     server error;
-  * deleting a folder unfiles its sessions rather than taking them with it.
+  * deleting a folder unfiles its sessions rather than taking them with it;
+  * each Analysis time filter selects its own window, an empty window says so
+    instead of drawing zeroes, and neither sentinel — an unmeasurable pace or an
+    unrated page — is ever averaged into a day.
 
 The database is a fresh in-memory SQLite per test, wired in by overriding the
 `get_db` dependency. `StaticPool` because the default pool would hand each
@@ -24,6 +27,8 @@ invisible to the next.
 """
 
 from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -80,22 +85,30 @@ def client(db_factory):
 
 
 def analytics_with(*levels: DifficultyLevel, **overrides) -> SessionAnalytics:
-    """A finished-session summary whose pages carry the given verdicts."""
+    """A finished-session summary whose pages carry the given verdicts.
+
+    Every field is overridable — the defaults are merged rather than passed
+    alongside `**overrides`, so a test that needs an unmeasurable pace can say
+    `session_wpm=0.0` instead of building the whole model by hand.
+    """
+
+    defaults = {
+        "session_id": "test-session",
+        "reader_id": READER,
+        "baseline_wpm": 200.0,
+        "session_wpm": 190.0,
+        "words_read": 1200,
+        "pages_read": len(levels),
+        "reading_duration_ms": 380_000,
+        "wall_duration_ms": 420_000,
+    }
 
     return SessionAnalytics(
-        session_id="test-session",
-        reader_id=READER,
-        baseline_wpm=200.0,
-        session_wpm=190.0,
-        words_read=1200,
-        pages_read=len(levels),
-        reading_duration_ms=380_000,
-        wall_duration_ms=420_000,
         pages=tuple(
             DifficultyMetrics(page_index=index, words=300, difficulty=level)
             for index, level in enumerate(levels)
         ),
-        **overrides,
+        **{**defaults, **overrides},
     )
 
 
@@ -308,3 +321,213 @@ def test_a_session_can_be_moved_out_of_every_folder(client, db_factory):
 
     client.patch(f"/api/sessions/{session_id}", json={"folderId": None})
     assert client.get("/api/sessions").json()["sessions"][0]["folderId"] is None
+
+
+# --------------------------------------------------------------------- analysis
+
+
+def store_on(db_factory, days_ago: int, analytics: SessionAnalytics, **kwargs) -> None:
+    """Store a session dated `days_ago` calendar days back.
+
+    At local noon, so the row cannot drift into the neighbouring day: an evening
+    session and a machine east of Greenwich is exactly how a UTC/local mix-up
+    hides, and this helper must not be the thing that hides it. Converted to naive
+    UTC on the way in, which is what SQLite holds — see `models.as_utc`.
+    """
+
+    with db_factory() as db:
+        row = record_session(db, analytics=analytics, **kwargs)
+        noon = datetime.now().astimezone().replace(hour=12, minute=0, second=0, microsecond=0)
+        # Subtracting from an aware value keeps today's offset, so a day across a
+        # clock change lands at 11:00 or 13:00 — still comfortably inside the day.
+        row.created_at = (noon - timedelta(days=days_ago)).astimezone(timezone.utc).replace(
+            tzinfo=None
+        )
+        db.commit()
+
+
+def analysis(client, range_key: str) -> dict:
+    response = client.get(f"/api/analysis?range={range_key}")
+    assert response.status_code == 200
+    return response.json()
+
+
+def test_each_time_filter_selects_its_own_window(client, db_factory):
+    """The four filters must actually differ, which needs four different windows.
+
+    Today is one calendar day, not the last 24 hours — so yesterday's reading is
+    out of "Today" however few hours ago it was.
+    """
+
+    for days_ago in (0, 3, 20, 200):
+        store_on(db_factory, days_ago, analytics_with(DifficultyLevel.LOW))
+
+    assert len(analysis(client, "today")["pagesPerDay"]) == 1
+    assert len(analysis(client, "week")["pagesPerDay"]) == 2
+    assert len(analysis(client, "month")["pagesPerDay"]) == 3
+    assert len(analysis(client, "all")["pagesPerDay"]) == 4
+
+
+def test_the_oldest_day_comes_first(client, db_factory):
+    """The x-axis reads left to right, and the backend owns that order."""
+
+    for days_ago in (1, 4, 0):
+        store_on(db_factory, days_ago, analytics_with(DifficultyLevel.LOW))
+
+    days = [point["dayStartMs"] for point in analysis(client, "week")["readingTimePerDay"]]
+    assert days == sorted(days)
+
+
+def test_an_empty_database_is_empty_rather_than_an_error(client):
+    body = analysis(client, "all")
+    assert body["empty"] is True
+    assert body["pagesPerDay"] == []
+    assert body["speedTrend"] == []
+
+
+def test_a_range_with_no_reading_in_it_is_empty_even_though_the_database_is_not(
+    client, db_factory
+):
+    """`empty` is a statement about the window, not about the reader's history.
+
+    A reader who last read in March has an empty "Today" and a full "All Time",
+    and the page's empty state has to be reachable from a database with rows in
+    it — otherwise nobody ever sees it after the first session.
+    """
+
+    store_on(db_factory, 200, analytics_with(DifficultyLevel.LOW))
+
+    assert analysis(client, "today")["empty"] is True
+    assert analysis(client, "all")["empty"] is False
+
+
+def test_two_sittings_in_one_day_are_one_point(client, db_factory):
+    """Counters add; rates average. A day does not have a total words-per-minute."""
+
+    store_on(
+        db_factory,
+        1,
+        analytics_with(
+            DifficultyLevel.LOW,
+            session_wpm=150.0,
+            words_read=300,
+            lookup_count=2,
+            reading_duration_ms=120_000,
+        ),
+    )
+    store_on(
+        db_factory,
+        1,
+        analytics_with(
+            DifficultyLevel.LOW,
+            DifficultyLevel.LOW,
+            session_wpm=190.0,
+            words_read=600,
+            lookup_count=3,
+            reading_duration_ms=180_000,
+        ),
+    )
+
+    body = analysis(client, "week")
+    assert len(body["pagesPerDay"]) == 1
+    assert body["pagesPerDay"][0]["pages"] == 3
+    assert body["lookupsPerDay"][0]["lookups"] == 5
+    assert body["readingTimePerDay"][0]["minutes"] == 5
+    assert body["speedTrend"][0]["wpm"] == 170
+
+
+def test_an_unmeasurable_session_is_left_out_of_the_daily_pace(client, db_factory):
+    """`session_wpm == 0.0` means "not measurable", and it is not a slow day.
+
+    Averaging it in halves a real 200 wpm day because one page was flicked past
+    too fast to time. The page count still counts — the reading happened, only
+    its pace is unknown.
+    """
+
+    store_on(db_factory, 1, analytics_with(DifficultyLevel.LOW, session_wpm=0.0))
+    store_on(db_factory, 1, analytics_with(DifficultyLevel.LOW, session_wpm=200.0))
+
+    body = analysis(client, "week")
+    assert body["speedTrend"][0]["wpm"] == 200
+    assert body["pagesPerDay"][0]["pages"] == 2
+
+
+def test_a_day_with_nothing_measurable_reports_no_pace_rather_than_zero(client, db_factory):
+    """A gap in the line is true. A zero is a claim that the reader read at 0 wpm."""
+
+    store_on(db_factory, 1, analytics_with(DifficultyLevel.LOW, session_wpm=0.0))
+
+    body = analysis(client, "week")
+    assert body["speedTrend"][0]["wpm"] is None
+    assert body["pagesPerDay"][0]["pages"] == 1
+
+
+def test_an_unrated_session_is_left_out_of_the_daily_difficulty(client, db_factory):
+    """UNKNOWN is not a fourth point on the Easy/Medium/Hard axis."""
+
+    store_on(db_factory, 1, analytics_with(DifficultyLevel.UNKNOWN))
+    store_on(db_factory, 1, analytics_with(DifficultyLevel.HIGH))
+
+    point = analysis(client, "week")["difficultyTrend"][0]
+    assert point["difficulty"] == 3
+    assert point["difficultyLabel"] == "Hard"
+
+
+def test_a_day_of_unrated_sessions_has_no_difficulty_at_all(client, db_factory):
+    store_on(db_factory, 1, analytics_with(DifficultyLevel.UNKNOWN))
+
+    point = analysis(client, "week")["difficultyTrend"][0]
+    assert point["difficulty"] is None
+    assert point["difficultyLabel"] is None
+
+
+def test_a_difficulty_tie_reports_the_harder_day(client, db_factory):
+    """One Medium and one Hard is 2.5, and a day is not easier than its hardest read.
+
+    `round()` would banker's-round that to Medium. Every other tie in TaleTrace
+    breaks toward the harder read, and this one has to as well.
+    """
+
+    store_on(db_factory, 1, analytics_with(DifficultyLevel.MEDIUM))
+    store_on(db_factory, 1, analytics_with(DifficultyLevel.HIGH))
+
+    assert analysis(client, "week")["difficultyTrend"][0]["difficultyLabel"] == "Hard"
+
+
+def test_a_very_short_session_still_appears(client, db_factory):
+    """No word-count threshold, anywhere.
+
+    A page read at breakfast is a legitimate short session, and dropping small
+    rows to tidy up a chart would drop it. Bad data is removed by provenance —
+    see `scripts/seed_history.py` — never by size.
+    """
+
+    store_on(
+        db_factory,
+        1,
+        analytics_with(DifficultyLevel.LOW, words_read=1, reading_duration_ms=2_000),
+    )
+
+    body = analysis(client, "week")
+    assert body["empty"] is False
+    assert body["pagesPerDay"][0]["pages"] == 1
+    # Two seconds of reading rounds to nought minutes, and the point is still there.
+    assert body["readingTimePerDay"][0]["minutes"] == 0
+
+
+def test_the_day_a_session_belongs_to_is_the_readers_day(client, db_factory):
+    """`dayStartMs` is local midnight, so the browser's label matches the bucket."""
+
+    store_on(db_factory, 2, analytics_with(DifficultyLevel.LOW))
+
+    day_start_ms = analysis(client, "week")["pagesPerDay"][0]["dayStartMs"]
+    expected = datetime.now().astimezone().date() - timedelta(days=2)
+    stamped = datetime.fromtimestamp(day_start_ms / 1000).astimezone()
+    assert stamped.date() == expected
+    assert (stamped.hour, stamped.minute) == (0, 0)
+
+
+def test_an_unknown_time_filter_is_refused(client):
+    """A typo is a 422, not a silent week — the four filters are a closed set."""
+
+    assert client.get("/api/analysis?range=fortnight").status_code == 422

@@ -39,16 +39,18 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session as OrmSession
 
 from backend.app.live_session import preflight
+from backend.app.modules.database.analysis import DIFFICULTY_SCORES, RANGE_DAYS, daily_history
 from backend.app.modules.database.models import Folder, Reader
 from backend.app.modules.database.models import Session as SessionRow
+from backend.app.modules.database.models import as_utc
 from backend.app.modules.database.recording import READER_ID, store_baseline
 from backend.app.modules.database.session import get_db
 from backend.app.modules.reading_speed.calibration import CalibrationError
@@ -173,18 +175,9 @@ class SessionPatch(BaseModel):
 
 
 def _epoch_ms(moment: datetime) -> int:
-    """A stored timestamp as epoch milliseconds, whatever SQLite handed back.
+    """A stored timestamp as epoch milliseconds, whatever SQLite handed back."""
 
-    `utc_now()` writes an aware UTC datetime, but SQLite has no timestamp type and
-    SQLAlchemy's format string carries no offset, so the value comes back *naive*.
-    Calling `.timestamp()` on it would have Python assume the server's local zone
-    and shift every session by the UTC offset — which reads on screen as sessions
-    dated a day early, and only for readers west of Greenwich.
-    """
-
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    return int(moment.timestamp() * 1000)
+    return int(as_utc(moment).timestamp() * 1000)
 
 
 def _difficulty(row: SessionRow) -> str | None:
@@ -338,6 +331,53 @@ def dashboard(db: OrmSession = Depends(get_db)) -> dict[str, Any]:
         "pagesToday": sum(row.pages_read for row in todays),
         "lookupsToday": sum(row.lookup_count for row in todays),
         **device_status(),
+    }
+
+
+AnalysisRange = Literal["today", "week", "month", "all"]
+assert set(AnalysisRange.__args__) == set(RANGE_DAYS), "range filters have drifted apart"
+
+
+@router.get("/analysis")
+def analysis(
+    range_: AnalysisRange = Query("week", alias="range"),
+    db: OrmSession = Depends(get_db),
+) -> dict[str, Any]:
+    """The Analysis page's five charts, one point per day of real reading.
+
+    `range` is a `Literal`, so an unrecognised filter is a 422 from FastAPI's own
+    validation rather than a silent fall back to a week of data the caller did not
+    ask for.
+
+    `empty` is about the *range*, not the database: a reader with months of history
+    who has not opened a book today gets the page's empty state for "Today" rather
+    than five blank axes. Sessions the range excludes are not a kind of nothing.
+
+    `wpm` and `difficulty` come out as `null` on a day whose sessions were all too
+    short to measure or too quiet to rate — see `analysis.daily_history`. Recharts
+    draws a gap through a null, which is the honest rendering; substituting a zero
+    or a "Medium" would put a number on the chart that nothing measured.
+    """
+
+    days = daily_history(db, range_key=range_)
+    return {
+        "empty": not days,
+        "readingTimePerDay": [
+            {"dayStartMs": day.day_start_ms, "minutes": day.minutes} for day in days
+        ],
+        "pagesPerDay": [{"dayStartMs": day.day_start_ms, "pages": day.pages} for day in days],
+        "lookupsPerDay": [
+            {"dayStartMs": day.day_start_ms, "lookups": day.lookups} for day in days
+        ],
+        "speedTrend": [{"dayStartMs": day.day_start_ms, "wpm": day.wpm} for day in days],
+        "difficultyTrend": [
+            {
+                "dayStartMs": day.day_start_ms,
+                "difficulty": DIFFICULTY_SCORES[day.difficulty] if day.difficulty else None,
+                "difficultyLabel": DIFFICULTY_LABELS[day.difficulty] if day.difficulty else None,
+            }
+            for day in days
+        ],
     }
 
 

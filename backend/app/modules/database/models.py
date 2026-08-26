@@ -22,6 +22,21 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def as_utc(moment: datetime) -> datetime:
+    """Undo SQLite's loss of the timezone on a column `utc_now()` wrote.
+
+    `utc_now()` stores an aware UTC datetime, but SQLite has no timestamp type and
+    SQLAlchemy's format string carries no offset, so the value comes back *naive*.
+    Anything that then calls `.timestamp()` or `.astimezone()` on it has Python
+    assume the server's local zone and shift the row by the UTC offset — which
+    reads on screen as sessions dated a day early, and only for readers west of
+    Greenwich. Every consumer of a stored timestamp goes through here so the
+    correction exists once rather than once per reader.
+    """
+
+    return moment.replace(tzinfo=timezone.utc) if moment.tzinfo is None else moment
+
+
 class TimestampMixin:
     """Common creation and update timestamps."""
 

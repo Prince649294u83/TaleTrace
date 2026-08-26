@@ -11,6 +11,17 @@ dist/
 logs/*.log
 *.sqlite3
 *.db
+
+# ...except the project's own database, which is committed on purpose. This is a
+# group project and the reading history in it is the seeded demo corpus, not
+# anybody's private reading: `scripts/seed_history.py` writes it, and having the
+# same twelve sessions on every clone is what makes the Analysis page show the
+# same charts for everyone without a rig.
+#
+# It is a binary, so git cannot merge two people's changes to it — a conflict on
+# this file is resolved by taking one side and re-running
+# `python scripts/seed_history.py --reset`, never by hand.
+!/taletrace.db
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/

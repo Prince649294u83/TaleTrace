@@ -32,9 +32,19 @@ function saveDb(db) {
 }
 
 // ----------------------------------------------------------------------------
-// Demo seed data — gives the app something to show immediately for the
-// built-in demo account, without affecting brand-new signups (which
-// correctly start on empty states, per spec).
+// The demo account. One user row and nothing else.
+//
+// It used to fabricate seven sessions and two folders as well — reading times,
+// pages, lookups, WPM and difficulty all from `Math.random()` — so the app had
+// charts to draw before a backend existed. Sessions, the dashboard and the
+// analysis charts now come from real `sessions` rows the rig wrote, and invented
+// figures that render identically to measured ones are worse than an empty state:
+// nobody can tell by looking which numbers were real. Deleted rather than left
+// unreferenced, so it cannot come back as a fallback.
+//
+// The user row stays because there is no authentication server-side — this is the
+// front door (`demo@taletrace.app` / `demo1234`), and it holds the per-account
+// onboarding flag the server has no concept of.
 // ----------------------------------------------------------------------------
 function seedDemoAccount(db) {
   const userId = 'user_demo';
@@ -59,43 +69,6 @@ function seedDemoAccount(db) {
     theme: 'dark',
     deviceStatus: 'connected',
     createdAt: Date.now(),
-  });
-
-  const folders = [
-    { id: uid('folder'), userId, name: 'Biology' },
-    { id: uid('folder'), userId, name: 'English' },
-  ];
-  db.folders.push(...folders);
-
-  const difficulties = ['Easy', 'Medium', 'Hard'];
-  const titles = [
-    ['Biology', 'Chapter 1 — Cell Structure'],
-    ['Biology', 'Chapter 2 — Photosynthesis'],
-    ['Biology', 'Chapter 3 — Genetics'],
-    ['English', 'First Flight — Ch. 4'],
-    ['English', 'The Last Lesson'],
-    [null, 'History — The Industrial Age'],
-    [null, 'Reading Session'],
-  ];
-
-  titles.forEach(([folderName, name], i) => {
-    const folder = folders.find((f) => f.name === folderName);
-    const daysAgo = i;
-    const date = Date.now() - daysAgo * 86400000;
-    db.sessions.push({
-      id: uid('session'),
-      userId,
-      folderId: folder ? folder.id : null,
-      name,
-      createdAt: date,
-      readingTimeMin: 25 + Math.floor(Math.random() * 30),
-      pagesRead: 12 + Math.floor(Math.random() * 25),
-      lookups: Math.floor(Math.random() * 12),
-      wpm: 220 + Math.floor(Math.random() * 60),
-      difficulty: difficulties[Math.floor(Math.random() * difficulties.length)],
-      summary:
-        'This section walks through the core ideas of the chapter, connecting each concept back to the central theme and highlighting the terms most likely to appear in review. Key examples are worked through step by step, and the closing passage ties the material back to the broader unit.',
-    });
   });
 
   saveDb(db);
@@ -284,81 +257,19 @@ export async function apiGetDashboard(userId) {
 }
 
 // ============================================================================
-// ANALYSIS
+// ANALYSIS — moved to the backend
+// ----------------------------------------------------------------------------
+// `apiGetAnalysis` lived here and aggregated the fabricated sessions above into
+// the five charts. It is gone, not merely unreferenced: `GET /api/analysis`
+// aggregates real `sessions` rows now, `api.js` calls it with no fallback, and a
+// still-callable local implementation is precisely the thing that would quietly
+// take over the next time the server was down.
+//
+// It also differed in ways worth recording, because the charts changed shape with
+// it: it bucketed by *rolling* 24-hour windows, so a session moved between bars
+// depending on the hour the page was loaded, and it capped All Time at 90 days.
+// The backend uses calendar days and no cap.
 // ============================================================================
-
-function rangeToDays(range) {
-  if (range === 'today') return 1;
-  if (range === 'week') return 7;
-  if (range === 'month') return 30;
-  return 90; // "all time" cap for the demo
-}
-
-export async function apiGetAnalysis(userId, range) {
-  await delay(550);
-  const db = loadDb();
-  const sessions = db.sessions.filter((s) => s.userId === userId);
-  const days = rangeToDays(range);
-
-  if (sessions.length === 0) {
-    return { empty: true };
-  }
-
-  const byDay = {};
-  const cutoff = Date.now() - days * 86400000;
-  sessions
-    .filter((s) => s.createdAt >= cutoff)
-    .forEach((s) => {
-      const key = new Date(s.createdAt).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-      });
-      if (!byDay[key]) {
-        byDay[key] = {
-          date: key,
-          readingTime: 0,
-          pages: 0,
-          lookups: 0,
-          wpmSamples: [],
-          difficultySamples: [],
-          ts: s.createdAt,
-        };
-      }
-      byDay[key].readingTime += s.readingTimeMin;
-      byDay[key].pages += s.pagesRead;
-      byDay[key].lookups += s.lookups;
-      byDay[key].wpmSamples.push(s.wpm);
-      byDay[key].difficultySamples.push(s.difficulty);
-    });
-
-  const difficultyScore = { Easy: 1, Medium: 2, Hard: 3 };
-  const scoreDifficulty = { 1: 'Easy', 2: 'Medium', 3: 'Hard' };
-
-  const days_ = Object.values(byDay).sort((a, b) => a.ts - b.ts);
-
-  const readingTimePerDay = days_.map((d) => ({ date: d.date, minutes: d.readingTime }));
-  const pagesPerDay = days_.map((d) => ({ date: d.date, pages: d.pages }));
-  const lookupsPerDay = days_.map((d) => ({ date: d.date, lookups: d.lookups }));
-  const speedTrend = days_.map((d) => ({
-    date: d.date,
-    wpm: Math.round(d.wpmSamples.reduce((a, b) => a + b, 0) / d.wpmSamples.length),
-  }));
-  const difficultyTrend = days_.map((d) => {
-    const avg = Math.round(
-      d.difficultySamples.reduce((a, s) => a + difficultyScore[s], 0) / d.difficultySamples.length
-    );
-    return { date: d.date, difficulty: avg, difficultyLabel: scoreDifficulty[avg] || 'Medium' };
-  });
-
-  return {
-    empty: false,
-    readingTimePerDay,
-    pagesPerDay,
-    lookupsPerDay,
-    speedTrend,
-    difficultyTrend,
-  };
-}
 
 // ============================================================================
 // SESSIONS / FOLDERS

@@ -8,9 +8,13 @@ this document.
 
 ## Documentation map
 
+- [Handoff](../AGENTS.md) — **start here.** Project rules, invariants, commands, roadmap, known traps
 - [System architecture](architecture.md) — module boundaries and dependency direction
 - [Module contracts](module-contracts.md) — inputs, outputs, dependencies, and reserved integrations
 - [Database schema](database-schema.md) — persistence model vocabulary and relationships
+- [Verification](verification.md) — the harnesses and what each one proves
+
+Running it, configuring it, and the hardware are in the [root README](../README.md).
 
 ## Current contract status
 
