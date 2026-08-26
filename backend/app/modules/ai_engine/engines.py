@@ -257,8 +257,6 @@ class SummaryGenerator:
         )
 
         if "error" not in result:
-            result.setdefault("flashcards", [])
-            result.setdefault("quiz", [])
             result.setdefault("session_summary", "")
             if not result.get("words_learned"):
                 result["words_learned"] = self._fallback_words_learned(session_history)

@@ -119,6 +119,28 @@ class StubAiEngine:
     create = _respond
 
 
+class StubLearningEngine:
+    def __init__(self, payload=None, *, raises=None, delay=0.0):
+        self.payload = payload if payload is not None else {}
+        self.raises = raises
+        self.delay = delay
+        self.calls: list = []
+
+    def generate(self, request):
+        self.calls.append(request)
+        if self.delay:
+            import time as _time
+            _time.sleep(self.delay)
+        if self.raises is not None:
+            raise self.raises
+        
+        from backend.app.modules.learning_engine.models import LearningCapabilityResponse
+        return LearningCapabilityResponse(
+            quiz=self.payload.get("quiz", []),
+            flashcards=self.payload.get("flashcards", [])
+        )
+
+
 EXPLANATION = {
     "oled_text": "a tower with a light",
     "full_explanation": "A tall tower whose lamp warns ships away from rocks.",
@@ -126,10 +148,13 @@ EXPLANATION = {
 }
 
 REVIEW = {
-    "flashcards": [{"word": "lighthouse", "fun_definition": "a warning tower"}],
-    "quiz": [{"question": "What warns ships?", "correct_answer": "a lighthouse"}],
     "session_summary": "Mira set out to climb the abandoned lighthouse.",
     "words_learned": [{"word": "lighthouse", "takeaway": "a warning tower"}],
+}
+
+LEARNING_MATERIAL = {
+    "flashcards": [{"word": "lighthouse", "fun_definition": "a warning tower"}],
+    "quiz": [{"question": "What warns ships?", "correct_answer": "a lighthouse", "options": ["a lighthouse", "a car"]}],
 }
 
 
@@ -247,7 +272,7 @@ def build_runtime(
     )
 
 
-def bridge(explain=None, review=None, mood=None) -> AiBridge:
+def bridge(explain=None, review=None, mood=None, learning=None) -> AiBridge:
     """An `AiBridge` with each capability stubbed independently.
 
     Independent because the failures are: a session can get an explanation and
@@ -258,6 +283,7 @@ def bridge(explain=None, review=None, mood=None) -> AiBridge:
     ai = AiBridge(book=BookMetadata(title="The Keeper's Daughter", genre="adventure"))
     ai.explanation_engine = explain if explain is not None else StubAiEngine(EXPLANATION)
     ai.summary_generator = review if review is not None else StubAiEngine(REVIEW)
+    ai.learning_engine = learning if learning is not None else StubLearningEngine(LEARNING_MATERIAL)
     ai.novel_mode = mood if mood is not None else StubAiEngine({"scene_mood": "wonder"})
     return ai
 

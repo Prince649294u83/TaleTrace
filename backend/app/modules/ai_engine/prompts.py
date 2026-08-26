@@ -165,26 +165,16 @@ class PromptBuilder:
         return (
             f"{PERSONA} The reader has just finished a reading session.\n\n"
             f"{self.book_description(context)}\n\n"
-            "Generate an engaging review from the session history: flashcards, "
-            "a multiple-choice comprehension quiz, the list of words learned, "
-            "and a short summary.\n\n"
+            "Generate an engaging review from the session history: the list of "
+            "words learned, and a short summary.\n\n"
             "RULES:\n"
             "1. Match the tone to the book's genre and audience; be "
             "encouraging.\n"
-            "2. hint_from_story must reference specific events or characters "
-            "from the passages in the history.\n"
-            "3. Quizzes should test understanding of the passage, not just word "
-            "recall.\n"
-            "4. words_learned must list every distinct word from the session "
+            "2. words_learned must list every distinct word from the session "
             "history, each with a one-line takeaway.\n"
-            "5. Keep session_summary to 1-2 sentences.\n\n"
+            "3. Keep session_summary to 1-2 sentences.\n\n"
             "Output this JSON structure:\n"
             "{"
-            '"flashcards": [{"word": "string", "hint_from_story": "string", '
-            '"fun_definition": "string"}], '
-            '"quiz": [{"question": "string", "options": ["string","string",'
-            '"string","string"], "correct_answer": "string", '
-            '"feedback": "string"}], '
             '"words_learned": [{"word": "string", "takeaway": "string"}], '
             '"session_summary": "string"'
             "}\n\n"

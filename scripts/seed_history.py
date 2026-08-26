@@ -45,12 +45,16 @@ knowing:
   (seeding a history must not move a measured pace), and using it would make the
   corpus differ between machines.
 
-What is *not* here is AI content: `summary` records what the row is, and
-`review_payload` is empty. Flashcards and quiz questions come from a real Groq
-call on a real session, and inventing plausible ones is exactly the kind of thing
-this corpus exists to replace. Run `scripts/golden_session.py` for rows with real
-review content in them.
+Review payloads for quiz and flashcard testing
+----------------------------------------------
+A subset of the seeded sessions carry a handcrafted `review_payload` — the same
+structure `AiBridge.review()` writes at session end. These are deterministic test
+fixtures, not AI output: the vocabulary comes from the session's own subject
+matter, and no Groq call is made. They exist so the website's Quiz and Flashcards
+pages have content to render against the seeded corpus, without an API key and
+without inventing a second generation path.
 """
+
 
 from __future__ import annotations
 
@@ -156,6 +160,130 @@ CORPUS: tuple[Reading, ...] = (
 )
 
 FOLDERS = ("Biology", "English")
+
+# Deterministic review payloads for a subset of sessions. Keyed by the session
+# name from the CORPUS table. The vocabulary is drawn from the session's own
+# subject matter — the words a reader *would* have looked up in that chapter.
+# No Groq call is made; no second generation path is created. These are pure
+# test fixtures so the website's Quiz and Flashcards pages have content to
+# render when running against the seeded corpus.
+#
+# The structure matches `AiOutcome.data` exactly: `session_summary`, `quiz`,
+# `flashcards`, and `words_learned`. `review.py` parses and validates every
+# field, so a typo here surfaces as a missing question or card, not a crash.
+SEED_REVIEW_PAYLOADS: dict[str, dict] = {
+    "Biology \u2014 Chapter 3, Genetics": {
+        "session_summary": "Explored heredity, DNA structure, and Mendel's laws of inheritance.",
+        "quiz": [
+            {
+                "question": "What molecule carries genetic information?",
+                "options": ["DNA", "RNA", "Protein", "Lipid"],
+                "correct_answer": "DNA",
+            },
+            {
+                "question": "Who is known as the father of genetics?",
+                "options": ["Darwin", "Mendel", "Lamarck", "Watson"],
+                "correct_answer": "Mendel",
+            },
+            {
+                "question": "What is an allele?",
+                "options": [
+                    "A variant form of a gene",
+                    "A type of cell",
+                    "A chromosome pair",
+                    "A protein sequence",
+                ],
+                "correct_answer": "A variant form of a gene",
+            },
+        ],
+        "flashcards": [
+            {"word": "allele", "fun_definition": "One of two or more versions of a gene."},
+            {"word": "genotype", "fun_definition": "The genetic makeup of an organism."},
+            {"word": "phenotype", "fun_definition": "The observable traits expressed by genes."},
+        ],
+        "words_learned": [
+            {"word": "allele", "takeaway": "Different forms of the same gene."},
+            {"word": "genotype", "takeaway": "The letters behind the trait."},
+            {"word": "phenotype", "takeaway": "What you can actually see."},
+        ],
+    },
+    "Biology \u2014 Chapter 2, Photosynthesis": {
+        "session_summary": "Covered how plants convert light energy into glucose using chlorophyll.",
+        "quiz": [
+            {
+                "question": "What pigment captures light in photosynthesis?",
+                "options": ["Chlorophyll", "Melanin", "Haemoglobin", "Carotene"],
+                "correct_answer": "Chlorophyll",
+            },
+            {
+                "question": "Where does photosynthesis take place?",
+                "options": ["Chloroplast", "Mitochondria", "Nucleus", "Ribosome"],
+                "correct_answer": "Chloroplast",
+            },
+        ],
+        "flashcards": [
+            {"word": "chlorophyll", "fun_definition": "The green pigment that makes photosynthesis possible."},
+            {"word": "stomata", "fun_definition": "Tiny pores on leaves that let gases in and out."},
+        ],
+        "words_learned": [
+            {"word": "chlorophyll", "takeaway": "Green pigment, absorbs sunlight."},
+            {"word": "stomata", "takeaway": "Leaf pores for gas exchange."},
+        ],
+    },
+    "Biology \u2014 Chapter 1, Cell Structure": {
+        "session_summary": "Studied the basic unit of life: organelles, membranes, and cell division.",
+        "quiz": [
+            {
+                "question": "What is the powerhouse of the cell?",
+                "options": ["Mitochondria", "Nucleus", "Ribosome", "Golgi body"],
+                "correct_answer": "Mitochondria",
+            },
+            {
+                "question": "What controls the activities of a cell?",
+                "options": ["Nucleus", "Cell wall", "Vacuole", "Cytoplasm"],
+                "correct_answer": "Nucleus",
+            },
+        ],
+        "flashcards": [
+            {"word": "mitochondria", "fun_definition": "The organelle that generates energy for the cell."},
+            {"word": "cytoplasm", "fun_definition": "The jelly-like substance filling the cell."},
+            {"word": "organelle", "fun_definition": "A specialised structure inside a cell."},
+        ],
+        "words_learned": [
+            {"word": "mitochondria", "takeaway": "Produces ATP, the cell's energy currency."},
+            {"word": "cytoplasm", "takeaway": "Holds organelles in place."},
+            {"word": "organelle", "takeaway": "Like tiny organs inside cells."},
+        ],
+    },
+    "English \u2014 The Last Lesson": {
+        "session_summary": "Read about the final French lesson in occupied Alsace.",
+        "quiz": [
+            {
+                "question": "Who is the narrator of The Last Lesson?",
+                "options": ["Franz", "M. Hamel", "The mayor", "Alphonse"],
+                "correct_answer": "Franz",
+            },
+        ],
+        "flashcards": [
+            {"word": "Alsace", "fun_definition": "A region in north-eastern France, near Germany."},
+        ],
+        "words_learned": [
+            {"word": "Alsace", "takeaway": "The French region that was taken over."},
+        ],
+    },
+    "English \u2014 First Flight, Ch. 4": {
+        "session_summary": "A chapter from the First Flight textbook exploring personal growth.",
+        "quiz": [
+            {
+                "question": "What genre is First Flight Chapter 4?",
+                "options": ["Prose", "Poetry", "Drama", "Essay"],
+                "correct_answer": "Prose",
+            },
+        ],
+        "flashcards": [],
+        "words_learned": [],
+    },
+}
 
 # Where the rows land. Read off the engine rather than rebuilt from settings, so a
 # `DATABASE_URL` pointing somewhere else is backed up and reported honestly instead
@@ -319,14 +447,28 @@ def main() -> int:
             row.created_at = moment.astimezone(timezone.utc).replace(tzinfo=None)
             row.ended_at = row.created_at
             row.folder_id = folders[reading.folder].id if reading.folder else None
-            row.summary = (
-                f"Seeded demo session ({SEED_MARKER}). No AI review was run for this "
-                f"row, so it has no flashcards or quiz questions — those come from a "
-                f"real session with Meaning Mode lookups in it."
-            )
+
+            # Inject the handcrafted review_payload when one exists for this
+            # session. The payload is set directly on the row rather than via
+            # the AiOutcome path, because there is no AI call to wrap — this
+            # is a deterministic fixture, and record_session was already called
+            # with review=None.
+            seed_payload = SEED_REVIEW_PAYLOADS.get(reading.name)
+            if seed_payload:
+                row.review_payload = seed_payload
+                row.summary = seed_payload.get("session_summary")
+                row.lookup_count = len(seed_payload.get("words_learned", []))
+                has_review = "quiz+cards"
+            else:
+                row.summary = (
+                    f"Seeded demo session ({SEED_MARKER}). No AI review was run "
+                    f"for this row."
+                )
+                has_review = "no review"
             print(
                 f"  {moment:%Y-%m-%d}  {row.words_read:>5} words  {row.pages_read:>2}p  "
-                f"{row.session_wpm:>6.1f} wpm  {row.difficulty:<8} {reading.name}"
+                f"{row.session_wpm:>6.1f} wpm  {row.difficulty:<8} [{has_review}]  "
+                f"{reading.name}"
             )
 
     print("\nDone. Open the Analysis page, or check the API directly:")

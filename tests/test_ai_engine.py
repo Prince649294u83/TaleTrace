@@ -241,8 +241,6 @@ class TestPromptBuilder:
         pb = PromptBuilder()
         ctx = ReadingContext(book=BookMetadata(title="Test Book"))
         prompt = pb.summary_prompt(ctx)
-        assert "flashcards" in prompt
-        assert "quiz" in prompt
         assert "words_learned" in prompt
         assert "session_summary" in prompt
 

@@ -47,29 +47,34 @@ class TimestampMixin:
 
 
 class Reader(TimestampMixin, Base):
-    """What the engine needs to know about the person reading. One row, for now.
+    """The persisted identity and ownership record for a TaleTrace reader.
 
-    No name, no email, no password. Those belong to whatever performs
-    authentication, and nothing here does: the website's login screen is a
-    `localStorage` gate for the look of the thing, and no credential ever reaches
-    this server. Keeping identity out of this table means there is no second copy
-    of it to disagree with the first, and no column that looks like an account
-    when there are no accounts.
+    Each reader has a name, email, and Argon2-hashed password, plus an opaque
+    session token that is rotated on every login and cleared on logout. The
+    token is stored in an HTTP-only cookie; the browser never sees the password
+    hash and this server never sees the plaintext password after signup.
 
-    What is here is the reading profile — the settings that change how a session
-    is measured or played back. `device_prefs` (text-to-speech, ambient music,
-    read-out-meaning) is not yet consulted by the runtime; this is where it lands
-    when it is, which is why it is stored server-side rather than left in the
-    browser with the rest of the cosmetics.
+    The canonical seeded reader is ``live-reader`` — it owns the demo corpus
+    written by ``seed_history.py`` and is initialised with ``demo@taletrace.app``
+    during ``init_db()`` only when its password hash is empty, so a real user who
+    has changed the demo password is never silently overwritten on restart.
 
-    `id` is a stable string, not a generated UUID, because `ReadingSpeedService`
-    keys baselines by reader id and the rig passes one in from
-    `recording.READER_ID`. A fresh id per row would orphan the calibration.
+    ``id`` is a stable string, not a generated UUID, because
+    ``ReadingSpeedService`` keys baselines by reader id and the rig passes one
+    in from ``recording.READER_ID``. A fresh id per row would orphan the
+    calibration.
     """
 
     __tablename__ = "readers"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    
+    # Auth fields
+    name: Mapped[str | None] = mapped_column(String(255))
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    profile_completed: Mapped[bool] = mapped_column(Integer, default=0) # bool stored as 0/1 in sqlite
+    session_token: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
 
     # The reader's own pace — a whole serialised `ReadingBaseline`, not just the
     # number. `is_evidence` is derived from `calibrated` and `method`, and
@@ -96,6 +101,7 @@ class Folder(TimestampMixin, Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(255))
+    reader_id: Mapped[str] = mapped_column(ForeignKey("readers.id", ondelete="CASCADE"), index=True, default="live-reader")
 
 
 class Session(TimestampMixin, Base):
@@ -131,6 +137,7 @@ class Session(TimestampMixin, Base):
     folder_id: Mapped[str | None] = mapped_column(
         ForeignKey("folders.id", ondelete="SET NULL"), index=True
     )
+    reader_id: Mapped[str] = mapped_column(ForeignKey("readers.id", ondelete="CASCADE"), index=True, default="live-reader")
 
     # --- measured, copied from SessionAnalytics ---
     baseline_wpm: Mapped[float] = mapped_column(Float, default=0.0)
@@ -151,131 +158,3 @@ class Session(TimestampMixin, Base):
     review_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     focus_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     lookups: Mapped[list[str]] = mapped_column(JSON, default=list)
-
-    ocr_results: Mapped[list[OCRResult]] = relationship(
-        back_populates="session", cascade="all, delete-orphan"
-    )
-    selected_words: Mapped[list[SelectedWord]] = relationship(
-        back_populates="session", cascade="all, delete-orphan"
-    )
-    ai_responses: Mapped[list[AIResponse]] = relationship(
-        back_populates="session", cascade="all, delete-orphan"
-    )
-    flashcards: Mapped[list[Flashcard]] = relationship(
-        back_populates="session", cascade="all, delete-orphan"
-    )
-    quizzes: Mapped[list[Quiz]] = relationship(
-        back_populates="session", cascade="all, delete-orphan"
-    )
-    reading_statistics: Mapped[list[ReadingStatistic]] = relationship(
-        back_populates="session", cascade="all, delete-orphan"
-    )
-
-
-class OCRResult(TimestampMixin, Base):
-    """Normalized OCR output captured during a session."""
-
-    __tablename__ = "ocr_results"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    session_id: Mapped[str] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), index=True
-    )
-    source_reference: Mapped[str | None] = mapped_column(String(2048))
-    extracted_text: Mapped[str] = mapped_column(Text, default="")
-    structured_content: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    confidence: Mapped[float | None] = mapped_column(Float)
-
-    session: Mapped[Session] = relationship(back_populates="ocr_results")
-    selected_words: Mapped[list[SelectedWord]] = relationship(back_populates="ocr_result")
-
-
-class SelectedWord(TimestampMixin, Base):
-    """An OCR word selected by a reader gesture."""
-
-    __tablename__ = "selected_words"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    session_id: Mapped[str] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), index=True
-    )
-    ocr_result_id: Mapped[str | None] = mapped_column(
-        ForeignKey("ocr_results.id", ondelete="SET NULL"), index=True
-    )
-    text: Mapped[str] = mapped_column(String(512))
-    bounding_box: Mapped[dict[str, Any] | None] = mapped_column(JSON)
-    confidence: Mapped[float | None] = mapped_column(Float)
-
-    session: Mapped[Session] = relationship(back_populates="selected_words")
-    ocr_result: Mapped[OCRResult | None] = relationship(back_populates="selected_words")
-
-
-class AIResponse(TimestampMixin, Base):
-    """A persisted response from a future AI capability."""
-
-    __tablename__ = "ai_responses"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    session_id: Mapped[str] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), index=True
-    )
-    capability: Mapped[str] = mapped_column(String(64), index=True)
-    prompt_reference: Mapped[str | None] = mapped_column(String(2048))
-    response_text: Mapped[str] = mapped_column(Text, default="")
-    response_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-
-    session: Mapped[Session] = relationship(back_populates="ai_responses")
-
-
-class Flashcard(TimestampMixin, Base):
-    """A study flashcard associated with a reading session."""
-
-    __tablename__ = "flashcards"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    session_id: Mapped[str] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), index=True
-    )
-    front: Mapped[str] = mapped_column(Text)
-    back: Mapped[str] = mapped_column(Text)
-    source_reference: Mapped[str | None] = mapped_column(String(2048))
-
-    session: Mapped[Session] = relationship(back_populates="flashcards")
-
-
-class Quiz(TimestampMixin, Base):
-    """A generated quiz and its structured questions."""
-
-    __tablename__ = "quizzes"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    session_id: Mapped[str] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), index=True
-    )
-    title: Mapped[str | None] = mapped_column(String(255))
-    questions: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
-    score: Mapped[float | None] = mapped_column(Float)
-
-    session: Mapped[Session] = relationship(back_populates="quizzes")
-
-
-class ReadingStatistic(TimestampMixin, Base):
-    """Aggregated reading metrics for a session."""
-
-    __tablename__ = "reading_statistics"
-    __table_args__ = (
-        CheckConstraint("words_read >= 0", name="ck_reading_statistics_words_read"),
-        CheckConstraint("duration_seconds >= 0", name="ck_reading_statistics_duration"),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    session_id: Mapped[str] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), index=True
-    )
-    words_read: Mapped[int] = mapped_column(Integer, default=0)
-    duration_seconds: Mapped[float] = mapped_column(Float, default=0.0)
-    pages_read: Mapped[int] = mapped_column(Integer, default=0)
-    selections_count: Mapped[int] = mapped_column(Integer, default=0)
-    additional_metrics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-
-    session: Mapped[Session] = relationship(back_populates="reading_statistics")

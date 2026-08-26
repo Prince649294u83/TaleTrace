@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.app.api.auth import router as auth_router
 from backend.app.api.companion import router as companion_router
 from backend.app.api.router import api_router
 from backend.app.config.settings import get_settings
@@ -54,4 +55,5 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+app.include_router(auth_router)
 app.include_router(companion_router)

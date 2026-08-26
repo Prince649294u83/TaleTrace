@@ -24,10 +24,30 @@ afternoon.
 
 ---
 
-## Two commands
+## Quick Start (One Command)
 
-There are only two commands anybody needs on day one. Neither needs hardware, an
-API key, a dataset or a network.
+If you just want to run the whole project immediately without step-by-step setup, use the provided start scripts. These will automatically create a virtual environment, install dependencies, copy `.env.example`, and start both the backend and frontend servers.
+
+**Windows:**
+```bat
+start.bat
+```
+
+**macOS / Linux:**
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+Once running, open the Local URL (usually `http://localhost:5173`) and log in with the seeded demo account to see real charts:
+- **Email**: `demo@taletrace.app`
+- **Password**: `demo1234`
+
+---
+
+## Two commands (Manual Setup)
+
+If you prefer to set up manually, there are only two commands anybody needs on day one. Neither needs hardware, an API key, a dataset or a network.
 
 **See the reading engine work:**
 
@@ -231,9 +251,15 @@ evidence about a real one rather than a separate thing that resembles it.
 
 ### 2.2 Test the hardware first
 
-Before any real session, ask the rig what it can do. This is the command to run
-first, every time — it prints and exits, starts nothing, reads nothing, and
-costs nothing:
+Before any real session, ask the rig what it can do. There is a diagnostic script to check whether everything is responding correctly before you run the actual application:
+
+```bash
+python scripts/hardware_check.py
+```
+
+This checks Python, required modules, environment variables, git integrity, network subnet compatibility, and probes the hardware URLs (Camera and Buttons). Fix every `[FAIL]` or `[WARN]` you intend to use before going on.
+
+Alternatively, you can run the live session preflight check:
 
 ```bash
 python -m backend.app.live_session --check
@@ -343,9 +369,7 @@ to `.taletrace_cache/` first. `--reset` deletes your own sessions too.
 
 Three quirks worth knowing:
 
-- Accounts are still in the browser's `localStorage`. There is no authentication
-  server-side and the backend holds exactly one reader, so the login is a front
-  door, not a security boundary. Nothing here should be exposed to a network.
+- Accounts are real, server-side, and protected by HTTP-only session cookies. Argon2 is used for password hashing.
 - Quizzes and Flashcards still use sample banks. The real data is already being
   persisted per session (`review_payload`); the endpoint that merges several
   sessions is not built yet.
@@ -369,7 +393,9 @@ through it.
 GET    /health
 
 # the website's own API — everything under /api. Plain JSON, no envelope.
-GET    /api/me                   PATCH  /api/me
+POST   /api/auth/signup          POST   /api/auth/login
+POST   /api/auth/logout          GET    /api/me
+PATCH  /api/me
 GET    /api/device/status
 GET    /api/dashboard
 GET    /api/analysis?range=today|week|month|all

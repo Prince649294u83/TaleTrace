@@ -91,7 +91,7 @@ class DayReading:
     difficulty: DifficultyLevel | None
 
 
-def daily_history(db: OrmSession, *, range_key: str) -> list[DayReading]:
+def daily_history(db: OrmSession, *, range_key: str, reader_id: str) -> list[DayReading]:
     """Every day in `range_key` that has reading on it, oldest first.
 
     Raises `KeyError` on an unknown range rather than silently defaulting to a
@@ -100,7 +100,7 @@ def daily_history(db: OrmSession, *, range_key: str) -> list[DayReading]:
     """
 
     days = RANGE_DAYS[range_key]
-    query = select(SessionRow)
+    query = select(SessionRow).where(SessionRow.reader_id == reader_id)
     if days is not None:
         query = query.where(SessionRow.created_at >= _cutoff(days))
 

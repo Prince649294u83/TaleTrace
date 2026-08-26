@@ -14,11 +14,12 @@ than in the API because the rig and the simulator need it too and neither can
 import a FastAPI router — and because `READER_ID` is a `readers` row id, so the
 three programs that name that row belong to one constant, not three.
 
-What is deliberately not stored
--------------------------------
-No `reader_id` column on the session. There is exactly one row in `readers`, so
-a foreign key to it would be a join that can only ever have one answer. When a
-second reader exists that column arrives with the rest of the multi-user work.
+Ownership
+---------
+Every session and folder carries a `reader_id` foreign key back to the `readers`
+table. The rig and the simulator write as `READER_ID` (``live-reader``); the
+website creates additional readers via signup and filters every query by the
+authenticated reader's id.
 
 No per-page rows. `analytics.pages` carries a `DifficultyMetrics` per page with
 its evidence, and the website has nowhere to show it — the Session Details page

@@ -1,47 +1,71 @@
-# TaleTrace system architecture
+# TaleTrace System Architecture
 
-## Boundary map
+TaleTrace consists of two independent but connected boundaries: the **Device Runtime** (where reading happens) and the **Web Runtime** (the companion website and its API).
 
-TaleTrace is organized as a FastAPI delivery layer around independent domain
-modules. Shared contracts live in `backend/app/models`; cross-cutting concerns
-live in `backend/app/core`, `backend/app/config`, and `backend/app/utils`.
+## 1. Boundary Map
 
 ```text
-frontend / external clients
-            |
-         API routers
-            |
-  image -> preprocessing -> OCR -> reading context
-                                      |       |
-                              gesture engine  AI engine
-                                      |       |
-                                  audio engine
-                                      |
-                                  database
+               ┌─────────────────────┐
+               │    WEB RUNTIME      │
+               │ (React + FastAPI)   │
+               └─────────┬───────────┘
+                         │
+      HTTP/REST (Real Auth & Cookie Sessions)
+                         │
+               ┌─────────▼───────────┐
+               │   DATABASE (SQLite) │
+               │   (Shared Storage)  │
+               └─────────▲───────────┘
+                         │
+      Database writes (1 row per finished session)
+                         │
+               ┌─────────┴───────────┐
+               │   DEVICE RUNTIME    │
+               │   (Reading Engine)  │
+               └─────────┬───────────┘
+                         │
+            Hardware/Virtual Sensors
+      (ESP32-CAM, ESP32 Buttons, Clocks)
 ```
 
-The diagram is a boundary map, not an implementation sequence. Modules should
-depend on shared contracts and interfaces rather than concrete providers.
+## 2. Device Runtime
 
-## Dependency direction
+The Device Runtime runs the core reading pipeline against physical (or simulated) hardware. It operates continuously in a control loop (`DeviceLoop`) and is **unauthenticated** because it runs locally on a trusted rig, producing data for whichever reader is currently active.
 
-- `api` owns HTTP composition and response envelopes.
-- `image_receiver` owns frame-ingestion contracts.
-- `preprocessing` owns the boundary for prepared image data.
-- `ocr` consumes prepared-image contracts and emits normalized OCR contracts.
-- `reading_engine` coordinates session state and reading context contracts.
-- `gesture_engine` consumes frame/OCR contracts and emits gesture/selection contracts.
-- `ai_engine` consumes content context and emits capability-specific response contracts.
-- `audio_engine` consumes future text/audio contracts and emits playback contracts.
-- `database` owns persistence schemas only.
-- `core`, `config`, and `utils` provide shared infrastructure contracts.
+The pipeline processes physical inputs into semantic reading history:
 
-Concrete providers must remain behind the relevant module interface. No module
-should import a provider-specific SDK into shared domain contracts.
+```text
+ESP32-CAM frame
+  → image_receiver/     (accepts the frame)
+  → preprocessing/      (deskew, enhance)
+  → ocr/                (Google Vision → words with bounding boxes)
+  → gesture_engine/     (fingertip → the word being pointed at)
+  → merge_memory/       (stitches pages, detects same-page, syncs pointer)
+  → reading_engine/     (the session: pointer, lookups, state machine)
+  → audio_engine/       (TTS narration)
+  → ai_engine/          (Meaning Mode + end-of-session review)
+  → reading_speed/      (baseline, session WPM, per-page difficulty)
+  → focus_analytics/    (Reading Focus Analysis)
+  → database/           (persists exactly one row per finished session)
+```
 
-## Shared vocabulary
+## 3. Web Runtime
 
-Shared Pydantic contracts are in `backend/app/models/domain.py` and include
-`Frame`, `OCRPage`, `OCRParagraph`, `OCRWord`, `Gesture`, `ReadingState`, and
-`Session`. HTTP responses use `ResponseEnvelope` from
-`backend/app/models/responses.py`.
+The Web Runtime (`backend/app/main.py` + `backend/app/api/companion.py` and `frontend/`) is a review companion. There is no "start reading" button here. It exposes data aggregated from `taletrace.db`.
+
+### Authentication and Ownership
+The API server is protected by **real server-side authentication**:
+- Accounts are created via `/api/auth/signup` and logged in via `/api/auth/login`.
+- Sessions use secure, HTTP-only cookies (`taletrace_session`).
+- Password hashing is handled by Argon2.
+- Data isolation: A reader can only access their own history, sessions, profiles, and analytical views.
+- The `get_current_reader` dependency ensures all protected endpoints automatically reject unauthenticated access (returning HTTP 401).
+
+## 4. Shared Vocabulary
+
+Both runtimes exchange data via a shared SQLite database (`taletrace.db`). The database schema is defined by SQLAlchemy models (`backend/app/modules/database/models.py`).
+
+- `Reader`: Owns sessions, folders, and profile configuration.
+- `Session`: A finished reading session (includes `session_wpm`, `words_read`, `review_payload`, `difficulty`, etc.).
+- `Folder`: Organization grouping for sessions.
+- `Token`: Manages session tokens for HTTP-only cookie rotation.

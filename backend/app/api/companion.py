@@ -46,12 +46,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session as OrmSession
 
+from backend.app.api.auth import get_current_reader
 from backend.app.live_session import preflight
+from backend.app.modules.database import review
 from backend.app.modules.database.analysis import DIFFICULTY_SCORES, RANGE_DAYS, daily_history
 from backend.app.modules.database.models import Folder, Reader
 from backend.app.modules.database.models import Session as SessionRow
 from backend.app.modules.database.models import as_utc
-from backend.app.modules.database.recording import READER_ID, store_baseline
+from backend.app.modules.database.recording import store_baseline
 from backend.app.modules.database.session import get_db
 from backend.app.modules.reading_speed.calibration import CalibrationError
 from backend.app.modules.reading_speed.models import DifficultyLevel
@@ -112,24 +114,6 @@ def _word_count(text: str) -> int:
 READING_TEST_WORDS = _word_count(READING_TEST_PASSAGE)
 
 
-# --------------------------------------------------------------------- the reader
-
-
-def _reader(db: OrmSession) -> Reader:
-    """The one reader row, created on first sight.
-
-    Created lazily rather than seeded at startup so a fresh checkout works with no
-    setup step, and so the row's defaults live in exactly one place — the model.
-    """
-
-    reader = db.get(Reader, READER_ID)
-    if reader is None:
-        reader = Reader(id=READER_ID, device_prefs={})
-        db.add(reader)
-        db.flush()
-    return reader
-
-
 # ------------------------------------------------------------------------ schemas
 
 
@@ -143,6 +127,9 @@ class ReaderPatch(BaseModel):
     readerType: str | None = None
     devicePrefs: dict[str, Any] | None = None
     theme: str | None = None
+    name: str | None = None
+    email: str | None = None
+    profileCompleted: bool | None = None
 
 
 class ReadingTestSubmission(BaseModel):
@@ -169,6 +156,24 @@ class SessionPatch(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     folderId: str | None = None
+
+
+class SessionSelection(BaseModel):
+    """Which sessions to build a quiz or a deck from.
+
+    Not `min_length=1`: an empty selection is refused in the route instead, so the
+    reader reads "Select at least one session" rather than Pydantic's account of
+    which field failed which constraint.
+    """
+
+    sessionIds: list[str] = Field(default_factory=list)
+
+
+class QuizSubmission(BaseModel):
+    """Answers to a quiz, as `{questionId: chosen option index}`."""
+
+    quizId: str
+    answers: dict[str, int] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------- serialisation
@@ -237,12 +242,15 @@ def _session_detail(row: SessionRow) -> dict[str, Any]:
 
 
 @router.get("/me")
-def get_me(db: OrmSession = Depends(get_db)) -> dict[str, Any]:
-    """The reading profile. Not the account — this server has no accounts."""
+def get_me(reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)) -> dict[str, Any]:
+    """The reading profile."""
 
-    reader = _reader(db)
-    baseline = reading_speed_service.baseline_for(READER_ID)
+    baseline = reading_speed_service.baseline_for(reader.id)
     return {
+        "id": reader.id,
+        "name": reader.name,
+        "email": reader.email,
+        "profileCompleted": bool(reader.profile_completed),
         "wpm": round(baseline.baseline_wpm),
         "wpmIsMeasured": baseline.is_evidence,
         "readingSpeedPreset": reader.reading_speed_preset,
@@ -253,7 +261,7 @@ def get_me(db: OrmSession = Depends(get_db)) -> dict[str, Any]:
 
 
 @router.patch("/me")
-def patch_me(patch: ReaderPatch, db: OrmSession = Depends(get_db)) -> dict[str, Any]:
+def patch_me(patch: ReaderPatch, reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)) -> dict[str, Any]:
     """Update whichever preferences were sent.
 
     `wpm` is not settable here. A baseline is either measured from the passage or
@@ -262,19 +270,27 @@ def patch_me(patch: ReaderPatch, db: OrmSession = Depends(get_db)) -> dict[str, 
     analytics treats a measured baseline and a claimed one differently.
     """
 
-    reader = _reader(db)
     sent = patch.model_fields_set
 
     if "readerType" in sent:
         reader.reader_type = patch.readerType
+        reader.profile_completed = 1  # Replicates the original mock backend behaviour during setup
     if "theme" in sent and patch.theme:
         reader.theme = patch.theme
     if "devicePrefs" in sent and patch.devicePrefs is not None:
         # Merged, not replaced: the Settings page sends one toggle at a time, and
         # replacing would silently reset the other three.
         reader.device_prefs = {**(reader.device_prefs or {}), **patch.devicePrefs}
+    if "name" in sent:
+        reader.name = patch.name
+    if "email" in sent:
+        reader.email = patch.email
+    if "profileCompleted" in sent:
+        reader.profile_completed = 1 if patch.profileCompleted else 0
 
-    return get_me(db)
+    db.commit()
+
+    return get_me(reader, db)
 
 
 @router.get("/device/status")
@@ -306,7 +322,7 @@ def device_status() -> dict[str, Any]:
 
 
 @router.get("/dashboard")
-def dashboard(db: OrmSession = Depends(get_db)) -> dict[str, Any]:
+def dashboard(reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)) -> dict[str, Any]:
     """Today's reading, plus the rig's status.
 
     "Today" is the server's local calendar day, matching the frontend mock's
@@ -314,16 +330,15 @@ def dashboard(db: OrmSession = Depends(get_db)) -> dict[str, Any]:
     apart, this is the line that has to learn about the reader's timezone.
     """
 
-    _reader(db)
-    baseline = reading_speed_service.baseline_for(READER_ID)
-    total = db.scalar(select(SessionRow.id).limit(1))
+    baseline = reading_speed_service.baseline_for(reader.id)
+    total = db.scalar(select(SessionRow.id).where(SessionRow.reader_id == reader.id).limit(1))
 
     # Compared naive-UTC, because that is what SQLite stores — see `_epoch_ms`.
     # The day boundary is the *reader's* midnight converted to UTC, not UTC
     # midnight, or "today's pages" would reset in the middle of an evening.
     midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
     since = midnight.astimezone(timezone.utc).replace(tzinfo=None)
-    todays = list(db.scalars(select(SessionRow).where(SessionRow.created_at >= since)))
+    todays = list(db.scalars(select(SessionRow).where(SessionRow.reader_id == reader.id, SessionRow.created_at >= since)))
 
     return {
         "empty": total is None,
@@ -341,6 +356,7 @@ assert set(AnalysisRange.__args__) == set(RANGE_DAYS), "range filters have drift
 @router.get("/analysis")
 def analysis(
     range_: AnalysisRange = Query("week", alias="range"),
+    reader: Reader = Depends(get_current_reader),
     db: OrmSession = Depends(get_db),
 ) -> dict[str, Any]:
     """The Analysis page's five charts, one point per day of real reading.
@@ -359,7 +375,7 @@ def analysis(
     or a "Medium" would put a number on the chart that nothing measured.
     """
 
-    days = daily_history(db, range_key=range_)
+    days = daily_history(db, range_key=range_, reader_id=reader.id)
     return {
         "empty": not days,
         "readingTimePerDay": [
@@ -390,7 +406,7 @@ def get_reading_test() -> dict[str, Any]:
 
 @router.post("/reading-test")
 def submit_reading_test(
-    submission: ReadingTestSubmission, db: OrmSession = Depends(get_db)
+    submission: ReadingTestSubmission, reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)
 ) -> dict[str, Any]:
     """Measure a baseline from the timed passage.
 
@@ -401,10 +417,9 @@ def submit_reading_test(
     it. A visible failure the reader can retry is the cheaper outcome.
     """
 
-    reader = _reader(db)
     try:
         baseline = reading_speed_service.calibrate(
-            READER_ID, word_count=READING_TEST_WORDS, elapsed_ms=submission.elapsedMs
+            reader.id, word_count=READING_TEST_WORDS, elapsed_ms=submission.elapsedMs
         )
     except CalibrationError as exc:
         raise HTTPException(
@@ -418,7 +433,7 @@ def submit_reading_test(
 
 @router.post("/reading-speed/preset")
 def submit_preset(
-    submission: PresetSubmission, db: OrmSession = Depends(get_db)
+    submission: PresetSubmission, reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)
 ) -> dict[str, Any]:
     """Record a self-reported pace, for a reader who skips the test."""
 
@@ -430,8 +445,7 @@ def submit_preset(
             f"{', '.join(SPEED_PRESETS)}",
         )
 
-    reader = _reader(db)
-    baseline = reading_speed_service.set_manual_baseline(READER_ID, baseline_wpm=wpm)
+    baseline = reading_speed_service.set_manual_baseline(reader.id, baseline_wpm=wpm)
     reader.reading_speed_preset = submission.preset
     store_baseline(reader, baseline)
     return {"wpm": round(baseline.baseline_wpm), "wpmIsMeasured": baseline.is_evidence}
@@ -441,26 +455,26 @@ def submit_preset(
 
 
 @router.get("/sessions")
-def list_sessions(db: OrmSession = Depends(get_db)) -> dict[str, Any]:
+def list_sessions(reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)) -> dict[str, Any]:
     """Every recorded session, newest first, with the folders to file them in."""
 
-    rows = db.scalars(select(SessionRow).order_by(SessionRow.created_at.desc())).all()
-    folders = db.scalars(select(Folder).order_by(Folder.name)).all()
+    rows = db.scalars(select(SessionRow).where(SessionRow.reader_id == reader.id).order_by(SessionRow.created_at.desc())).all()
+    folders = db.scalars(select(Folder).where(Folder.reader_id == reader.id).order_by(Folder.name)).all()
     return {
         "folders": [{"id": f.id, "name": f.name} for f in folders],
         "sessions": [_session_summary_row(row) for row in rows],
     }
 
 
-def _require_session(db: OrmSession, session_id: str) -> SessionRow:
+def _require_session(db: OrmSession, session_id: str, reader_id: str) -> SessionRow:
     row = db.get(SessionRow, session_id)
-    if row is None:
+    if row is None or row.reader_id != reader_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found.")
     return row
 
 
 @router.get("/sessions/{session_id}")
-def session_details(session_id: str, db: OrmSession = Depends(get_db)) -> dict[str, Any]:
+def session_details(session_id: str, reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)) -> dict[str, Any]:
     """One session in full.
 
     `summary` is `None` for a session read without Meaning Mode. That is not a
@@ -469,43 +483,45 @@ def session_details(session_id: str, db: OrmSession = Depends(get_db)) -> dict[s
     not an error.
     """
 
-    return _session_detail(_require_session(db, session_id))
+    return _session_detail(_require_session(db, session_id, reader.id))
 
 
 @router.patch("/sessions/{session_id}")
 def patch_session(
-    session_id: str, patch: SessionPatch, db: OrmSession = Depends(get_db)
+    session_id: str, patch: SessionPatch, reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)
 ) -> dict[str, Any]:
     """Rename a session, or move it into a folder (or out of all of them)."""
 
-    row = _require_session(db, session_id)
+    row = _require_session(db, session_id, reader.id)
     sent = patch.model_fields_set
 
     if "name" in sent and patch.name:
         row.name = patch.name
     if "folderId" in sent:
-        if patch.folderId is not None and db.get(Folder, patch.folderId) is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found.")
+        if patch.folderId is not None:
+            folder = db.get(Folder, patch.folderId)
+            if folder is None or folder.reader_id != reader.id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found.")
         row.folder_id = patch.folderId
 
     return _session_summary_row(row)
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_session(session_id: str, db: OrmSession = Depends(get_db)) -> Response:
+def delete_session(session_id: str, reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)) -> Response:
     """Delete a session and everything hanging off it.
 
     Really deleted, not flagged. The reader asked; a session they cannot see but
     which still counts toward today's pages is worse than gone.
     """
 
-    db.delete(_require_session(db, session_id))
+    db.delete(_require_session(db, session_id, reader.id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/folders", status_code=status.HTTP_201_CREATED)
-def create_folder(body: FolderBody, db: OrmSession = Depends(get_db)) -> dict[str, Any]:
-    folder = Folder(name=body.name)
+def create_folder(body: FolderBody, reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)) -> dict[str, Any]:
+    folder = Folder(name=body.name, reader_id=reader.id)
     db.add(folder)
     db.flush()
     return {"id": folder.id, "name": folder.name}
@@ -513,17 +529,17 @@ def create_folder(body: FolderBody, db: OrmSession = Depends(get_db)) -> dict[st
 
 @router.patch("/folders/{folder_id}")
 def rename_folder(
-    folder_id: str, body: FolderBody, db: OrmSession = Depends(get_db)
+    folder_id: str, body: FolderBody, reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)
 ) -> dict[str, Any]:
     folder = db.get(Folder, folder_id)
-    if folder is None:
+    if folder is None or folder.reader_id != reader.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found.")
     folder.name = body.name
     return {"id": folder.id, "name": folder.name}
 
 
 @router.delete("/folders/{folder_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_folder(folder_id: str, db: OrmSession = Depends(get_db)) -> Response:
+def delete_folder(folder_id: str, reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)) -> Response:
     """Delete a folder. Its sessions survive, unfiled.
 
     The `ON DELETE SET NULL` on `sessions.folder_id` says the same thing at the
@@ -534,10 +550,131 @@ def delete_folder(folder_id: str, db: OrmSession = Depends(get_db)) -> Response:
     """
 
     folder = db.get(Folder, folder_id)
-    if folder is None:
+    if folder is None or folder.reader_id != reader.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found.")
 
-    for row in db.scalars(select(SessionRow).where(SessionRow.folder_id == folder_id)):
+    for row in db.scalars(select(SessionRow).where(SessionRow.folder_id == folder_id, SessionRow.reader_id == reader.id)):
         row.folder_id = None
     db.delete(folder)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------- quizzes & flashcards
+#
+# Both of these are reads. The AI Engine wrote a quiz, a set of flashcards, the
+# words learned and a summary when each session ended, and `review_payload` has
+# held them ever since — so "Generate Quiz" merges rows, it does not think. No
+# route in this section may call the AI Engine. A second call would spend a
+# request to produce a different quiz about the same reading, and the reader would
+# have no way to know why the questions changed between two clicks.
+
+
+def _selected(db: OrmSession, session_ids: list[str], reader_id: str) -> list[SessionRow]:
+    """The rows the reader picked, or a 4xx naming what went wrong.
+
+    A missing id is a 404 rather than a quietly shorter quiz: the Sessions page
+    offered these, so an id that no longer resolves means the list is stale, and a
+    quiz built from four of the five sessions somebody selected is indistinguishable
+    on screen from one built from all five.
+    """
+
+    if not session_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Select at least one session first.",
+        )
+
+    # `dict.fromkeys` de-duplicates while keeping the order the reader clicked in.
+    return [_require_session(db, sid, reader_id) for sid in dict.fromkeys(session_ids)]
+
+
+# Why a selection can hold no review, worded for somebody who is looking at an
+# empty page and has no idea what Meaning Mode is.
+NO_REVIEW = (
+    "There is nothing to build from in those sessions. A quiz and flashcards are "
+    "written when a session ends, from the words the reader pressed the button on "
+    "— a session read straight through has none."
+)
+
+
+@router.post("/quiz")
+def generate_quiz(
+    selection: SessionSelection, reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)
+) -> dict[str, Any]:
+    """The quiz for a selection of sessions, without the answer key.
+
+    `questions` carries the text and the options and nothing else. The correct
+    index stays in this process — see `review.quiz_id` for how submit finds it
+    again without either storing it or sending it.
+    """
+
+    rows = _selected(db, selection.sessionIds, reader.id)
+    questions = review.merge_quiz(rows)
+    if not questions:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=NO_REVIEW,
+        )
+
+    return {
+        "quizId": review.quiz_id(row.id for row in rows),
+        "questions": [
+            {"id": question.id, "question": question.question, "options": list(question.options)}
+            for question in questions
+        ],
+    }
+
+
+@router.post("/quiz/submit")
+def submit_quiz(submission: QuizSubmission, reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)) -> dict[str, Any]:
+    """Mark a submission and return the score with the correct answers.
+
+    The answer key is rebuilt here, from the same rows the quiz id names, rather
+    than looked up: `merge_quiz` is deterministic, so re-deriving is cheaper than
+    storing and cannot go stale against a restart.
+
+    A 404 means the quiz cannot be rebuilt — a session in it was deleted while the
+    reader was answering. Better than marking them against the questions that
+    happen to survive, which would report a score out of a total they never saw.
+    """
+
+    session_ids = review.sessions_in(submission.quizId)
+    # Ownership check: only include sessions belonging to this reader.
+    rows = [
+        row for row in (db.get(SessionRow, sid) for sid in session_ids)
+        if row is not None and row.reader_id == reader.id
+    ]
+    questions = review.merge_quiz(rows) if rows else []
+    if not questions:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="That quiz can no longer be scored, because the sessions it came "
+            "from are gone. Generating a new one will work.",
+        )
+
+    return review.score(questions, submission.answers)
+
+
+@router.post("/flashcards")
+def generate_flashcards(
+    selection: SessionSelection, reader: Reader = Depends(get_current_reader), db: OrmSession = Depends(get_db)
+) -> dict[str, Any]:
+    """The deck for a selection of sessions, one card per distinct word.
+
+    Not capped, deliberately — `review.merge_flashcards` says why.
+    """
+
+    rows = _selected(db, selection.sessionIds, reader.id)
+    cards = review.merge_flashcards(rows)
+    if not cards:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=NO_REVIEW,
+        )
+
+    return {
+        "cards": [
+            {"id": card.id, "term": card.term, "definition": card.definition} for card in cards
+        ]
+    }
+

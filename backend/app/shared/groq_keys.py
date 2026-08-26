@@ -37,6 +37,7 @@ _LEGACY = "GROQ_API_KEY"
 
 AI_ENGINE_VARIABLE = "GROQ_API_KEY_1"
 MERGE_ENGINE_VARIABLE = "GROQ_API_KEY_2"
+LEARNING_ENGINE_VARIABLE = "GROQ_API_KEY_3"
 
 # Both subsystems' model names, here rather than one per module. They were one per
 # module, and when Groq retired `llama-3.3-70b-versatile` that meant three stale
@@ -72,6 +73,13 @@ def merge_engine_key() -> str:
     return _resolve(MERGE_ENGINE_VARIABLE)
 
 
+def learning_engine_key() -> str:
+    """The key for the Learning Engine (quiz/flashcards). Strictly GROQ_API_KEY_3, no fallback."""
+
+    return (os.environ.get(LEARNING_ENGINE_VARIABLE) or "").strip()
+
+
+
 def chat_model() -> str:
     """The model for explanations and for text reconstruction.
 
@@ -99,4 +107,5 @@ def describe() -> list[tuple[str, str, bool]]:
     return [
         ("AI Engine", AI_ENGINE_VARIABLE, bool(ai_engine_key())),
         ("Merge Engine", MERGE_ENGINE_VARIABLE, bool(merge_engine_key())),
+        ("Learning Engine", LEARNING_ENGINE_VARIABLE, bool(learning_engine_key())),
     ]

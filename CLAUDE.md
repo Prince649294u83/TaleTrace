@@ -4,6 +4,12 @@
 document: what this project is, the invariants that look like bugs, the commands,
 what to do next, and the traps that have already cost hours.
 
+**There is work in progress.** [HANDOFF.md](HANDOFF.md) describes the uncommitted
+Quiz + Flashcards change in the working tree — what is written, what is left, and
+in what order. Read it before touching `backend/app/modules/database/review.py`,
+`backend/app/api/companion.py` or the frontend services. Delete it once that work
+is pushed.
+
 The rules below are repeated here because they are the expensive ones to get
 wrong, and this file is the one that loads automatically.
 

@@ -22,7 +22,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from './api';
-import * as mock from './mockBackend';
 
 // Local midnight, which is what the backend sends: `dayStartMs`. Built through
 // the Date constructor rather than a literal so the expected label is "Aug 20"
@@ -150,28 +149,3 @@ describe('api.getAnalysis', () => {
   });
 });
 
-describe('mockBackend', () => {
-  it('has no analysis implementation left to fall back to', () => {
-    // Deleted, not merely unreferenced. An unused function that still returns
-    // randomised charts is one `catch` block away from being used again.
-    expect(Object.keys(mock).filter((name) => /analysis/i.test(name))).toEqual([]);
-  });
-
-  it('seeds an account and no reading history', async () => {
-    // `seedDemoAccount` used to fabricate seven sessions with `Math.random()`
-    // pages, lookups, WPM and difficulty. The login it provides is all that is
-    // left of it, and the sessions it creates must stay at zero.
-    const store = new Map();
-    vi.stubGlobal('localStorage', {
-      getItem: (key) => store.get(key) ?? null,
-      setItem: (key, value) => store.set(key, value),
-    });
-
-    await mock.apiLogin({ email: 'demo@taletrace.app', password: 'demo1234' });
-
-    const db = JSON.parse(store.get('taletrace_db_v1'));
-    expect(db.users).toHaveLength(1);
-    expect(db.sessions).toEqual([]);
-    expect(db.folders).toEqual([]);
-  });
-});

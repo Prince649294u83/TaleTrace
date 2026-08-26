@@ -36,10 +36,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
 
+from backend.app.api.auth import get_current_reader
 from backend.app.api.companion import READING_TEST_WORDS
 from backend.app.main import app
 from backend.app.modules.database.base import Base
-from backend.app.modules.database.models import Folder
+from backend.app.modules.database.models import Folder, Reader
 from backend.app.modules.database.recording import record_session, session_difficulty
 from backend.app.modules.database.session import get_db
 from backend.app.modules.reading_engine.ai_bridge import AiOutcome
@@ -61,12 +62,19 @@ def db_factory():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    yield sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    # Seed the live-reader row so foreign keys and auth work.
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    with factory() as db:
+        db.add(Reader(id=READER, device_prefs={}))
+        db.commit()
+    yield factory
     engine.dispose()
 
 
 @pytest.fixture
 def client(db_factory):
+    _reader_cache = {}
+
     def override():
         session = db_factory()
         try:
@@ -75,7 +83,15 @@ def client(db_factory):
         finally:
             session.close()
 
+    def override_auth():
+        """Return the test reader without requiring a cookie."""
+        if "reader" not in _reader_cache:
+            with db_factory() as db:
+                _reader_cache["reader"] = db.get(Reader, READER)
+        return _reader_cache["reader"]
+
     app.dependency_overrides[get_db] = override
+    app.dependency_overrides[get_current_reader] = override_auth
     # The baseline store is process-wide and deliberately outlives requests, so a
     # test that calibrates would otherwise leak its baseline into the next one.
     reading_speed_service._baselines.pop(READER, None)
@@ -531,3 +547,318 @@ def test_an_unknown_time_filter_is_refused(client):
     """A typo is a 422, not a silent week — the four filters are a closed set."""
 
     assert client.get("/api/analysis?range=fortnight").status_code == 422
+
+
+# ---------------------------------------------------------- quizzes & flashcards
+#
+# The quiz and flashcard routes are reads: they merge `review_payload` blobs that
+# the AI Engine wrote when each session ended. No route in this section may call
+# the AI Engine, and no test here invokes Groq — the payloads are handcrafted
+# literals, the smallest structures that exercise every code path in `review.py`.
+
+
+def _review_with_quiz_and_cards(**overrides):
+    """An AiOutcome whose payload has one scoreable question and one flashcard."""
+
+    payload = {
+        "session_summary": "A test session.",
+        "quiz": [
+            {
+                "question": "What is photosynthesis?",
+                "options": [
+                    "Energy from light",
+                    "Energy from heat",
+                    "Energy from sound",
+                    "Energy from wind",
+                ],
+                "correct_answer": "Energy from light",
+            }
+        ],
+        "flashcards": [
+            {"word": "chlorophyll", "fun_definition": "The green pigment in leaves."}
+        ],
+        "words_learned": [
+            {"word": "chlorophyll", "takeaway": "Makes leaves green."}
+        ],
+    }
+    payload.update(overrides)
+    return AiOutcome(capability="summary_generator", ok=True, data=payload)
+
+
+def store_with_review(db_factory, review, **kwargs):
+    """Store a session with an AiOutcome and return its id."""
+
+    return store(db_factory, analytics_with(DifficultyLevel.LOW), review=review, **kwargs)
+
+
+# ----------------------------------------------------------------- quiz generation
+
+
+def test_a_session_with_review_yields_a_quiz(client, db_factory):
+    """The happy path: one session, one question, a quizId and no answer key."""
+
+    sid = store_with_review(db_factory, _review_with_quiz_and_cards())
+
+    response = client.post("/api/quiz", json={"sessionIds": [sid]})
+    assert response.status_code == 200
+
+    body = response.json()
+    assert "quizId" in body
+    assert len(body["questions"]) == 1
+
+    question = body["questions"][0]
+    assert question["question"] == "What is photosynthesis?"
+    assert len(question["options"]) == 4
+    # The answer key must never reach the browser.
+    assert "correct_answer" not in question
+    assert "correct_index" not in question
+    assert "correctIndex" not in question
+
+
+def test_quiz_merges_questions_from_several_sessions(client, db_factory):
+    """Round-robin: each session contributes before any one dominates."""
+
+    review_a = _review_with_quiz_and_cards(
+        quiz=[
+            {
+                "question": "What is a cell?",
+                "options": ["A unit of life", "A battery", "A room"],
+                "correct_answer": "A unit of life",
+            },
+            {
+                "question": "What is mitosis?",
+                "options": ["Cell division", "Cell death"],
+                "correct_answer": "Cell division",
+            },
+        ]
+    )
+    review_b = _review_with_quiz_and_cards(
+        quiz=[
+            {
+                "question": "What is DNA?",
+                "options": ["Genetic material", "A protein", "A lipid"],
+                "correct_answer": "Genetic material",
+            }
+        ]
+    )
+
+    sid_a = store_with_review(db_factory, review_a)
+    sid_b = store_with_review(db_factory, review_b)
+
+    body = client.post("/api/quiz", json={"sessionIds": [sid_a, sid_b]}).json()
+    questions = [q["question"] for q in body["questions"]]
+
+    # All three questions are present, round-robin interleaved. The exact order
+    # depends on which UUID sorts first (the tie-breaker when created_at is the
+    # same), so we assert the full set rather than one particular interleaving.
+    assert set(questions) == {"What is a cell?", "What is DNA?", "What is mitosis?"}
+    assert len(questions) == 3
+
+
+def test_quiz_is_capped_at_ten_questions(client, db_factory):
+    """A month of reading must not produce a hundred-question quiz."""
+
+    review = _review_with_quiz_and_cards(
+        quiz=[
+            {
+                "question": f"Question {i}?",
+                "options": ["A", "B", "C"],
+                "correct_answer": "A",
+            }
+            for i in range(15)
+        ]
+    )
+    sid = store_with_review(db_factory, review)
+
+    body = client.post("/api/quiz", json={"sessionIds": [sid]}).json()
+    assert len(body["questions"]) == 10
+
+
+def test_duplicate_questions_are_merged_across_sessions(client, db_factory):
+    """The same question from two sessions appears once, not twice."""
+
+    same_quiz = [
+        {
+            "question": "What is photosynthesis?",
+            "options": ["Light energy", "Heat energy"],
+            "correct_answer": "Light energy",
+        }
+    ]
+    sid_a = store_with_review(db_factory, _review_with_quiz_and_cards(quiz=same_quiz))
+    sid_b = store_with_review(db_factory, _review_with_quiz_and_cards(quiz=same_quiz))
+
+    body = client.post("/api/quiz", json={"sessionIds": [sid_a, sid_b]}).json()
+    assert len(body["questions"]) == 1
+
+
+def test_quiz_for_sessions_without_review_is_a_404(client, db_factory):
+    """A session read straight through has no quiz. The page shows NO_REVIEW."""
+
+    sid = store(db_factory, analytics_with(DifficultyLevel.LOW), review=None)
+
+    response = client.post("/api/quiz", json={"sessionIds": [sid]})
+    assert response.status_code == 404
+    assert "nothing to build" in response.json()["detail"].lower()
+
+
+def test_quiz_with_empty_selection_is_a_422(client):
+    """Select at least one session first."""
+
+    response = client.post("/api/quiz", json={"sessionIds": []})
+    assert response.status_code == 422
+
+
+def test_quiz_for_a_missing_session_is_a_404(client):
+    """A stale list is a 404, not a quietly shorter quiz."""
+
+    response = client.post("/api/quiz", json={"sessionIds": ["no-such-session"]})
+    assert response.status_code == 404
+
+
+# -------------------------------------------------------------- quiz submission
+
+
+def test_quiz_submission_is_scored_server_side(client, db_factory):
+    """The server rebuilds the answer key. No answers travel to the browser."""
+
+    sid = store_with_review(db_factory, _review_with_quiz_and_cards())
+
+    quiz = client.post("/api/quiz", json={"sessionIds": [sid]}).json()
+    quiz_id = quiz["quizId"]
+    question_id = quiz["questions"][0]["id"]
+
+    # Submit the correct answer (index 0 = "Energy from light").
+    result = client.post(
+        "/api/quiz/submit",
+        json={"quizId": quiz_id, "answers": {question_id: 0}},
+    ).json()
+
+    assert result["score"] == 1
+    assert result["total"] == 1
+    assert result["percent"] == 100
+    assert len(result["results"]) == 1
+    assert result["results"][0]["correct"] is True
+    assert result["results"][0]["correctIndex"] == 0
+
+
+def test_a_wrong_answer_scores_zero(client, db_factory):
+    sid = store_with_review(db_factory, _review_with_quiz_and_cards())
+
+    quiz = client.post("/api/quiz", json={"sessionIds": [sid]}).json()
+    quiz_id = quiz["quizId"]
+    question_id = quiz["questions"][0]["id"]
+
+    result = client.post(
+        "/api/quiz/submit",
+        json={"quizId": quiz_id, "answers": {question_id: 2}},
+    ).json()
+
+    assert result["score"] == 0
+    assert result["percent"] == 0
+    assert result["results"][0]["correct"] is False
+
+
+def test_an_unanswered_question_is_wrong(client, db_factory):
+    """Skipping a question is wrong, same as on paper."""
+
+    sid = store_with_review(db_factory, _review_with_quiz_and_cards())
+
+    quiz = client.post("/api/quiz", json={"sessionIds": [sid]}).json()
+    # Submit with no answers at all.
+    result = client.post(
+        "/api/quiz/submit",
+        json={"quizId": quiz["quizId"], "answers": {}},
+    ).json()
+
+    assert result["score"] == 0
+    assert result["total"] == 1
+
+
+def test_submitting_after_session_deletion_is_a_404(client, db_factory):
+    """A session deleted mid-quiz means the quiz can no longer be scored."""
+
+    sid = store_with_review(db_factory, _review_with_quiz_and_cards())
+
+    quiz = client.post("/api/quiz", json={"sessionIds": [sid]}).json()
+    client.delete(f"/api/sessions/{sid}")
+
+    response = client.post(
+        "/api/quiz/submit",
+        json={"quizId": quiz["quizId"], "answers": {}},
+    )
+    assert response.status_code == 404
+    assert "no longer be scored" in response.json()["detail"]
+
+
+# ------------------------------------------------------------------- flashcards
+
+
+def test_a_session_with_review_yields_flashcards(client, db_factory):
+    sid = store_with_review(db_factory, _review_with_quiz_and_cards())
+
+    body = client.post("/api/flashcards", json={"sessionIds": [sid]}).json()
+    assert len(body["cards"]) >= 1
+
+    card = body["cards"][0]
+    assert card["term"] == "chlorophyll"
+    assert "green" in card["definition"].lower()
+    assert "id" in card
+
+
+def test_flashcards_deduplicate_across_sessions(client, db_factory):
+    """The same word from two sessions appears as one card, not two."""
+
+    sid_a = store_with_review(db_factory, _review_with_quiz_and_cards())
+    sid_b = store_with_review(db_factory, _review_with_quiz_and_cards())
+
+    body = client.post("/api/flashcards", json={"sessionIds": [sid_a, sid_b]}).json()
+
+    terms = [card["term"].lower() for card in body["cards"]]
+    assert terms.count("chlorophyll") == 1
+
+
+def test_flashcards_for_sessions_without_review_is_a_404(client, db_factory):
+    sid = store(db_factory, analytics_with(DifficultyLevel.LOW), review=None)
+
+    response = client.post("/api/flashcards", json={"sessionIds": [sid]})
+    assert response.status_code == 404
+
+
+def test_flashcards_with_empty_selection_is_a_422(client):
+    response = client.post("/api/flashcards", json={"sessionIds": []})
+    assert response.status_code == 422
+
+
+def test_quiz_id_is_deterministic_across_requests(client, db_factory):
+    """The same sessions produce the same quizId, so submit can rebuild the key."""
+
+    sid = store_with_review(db_factory, _review_with_quiz_and_cards())
+
+    quiz_1 = client.post("/api/quiz", json={"sessionIds": [sid]}).json()
+    quiz_2 = client.post("/api/quiz", json={"sessionIds": [sid]}).json()
+
+    assert quiz_1["quizId"] == quiz_2["quizId"]
+    assert quiz_1["questions"] == quiz_2["questions"]
+
+
+def test_quiz_id_is_order_independent(client, db_factory):
+    """Selecting the same three sessions in a different order is the same quiz."""
+
+    sid_a = store_with_review(db_factory, _review_with_quiz_and_cards())
+    sid_b = store_with_review(
+        db_factory,
+        _review_with_quiz_and_cards(
+            quiz=[
+                {
+                    "question": "What is DNA?",
+                    "options": ["Genetic material", "A protein"],
+                    "correct_answer": "Genetic material",
+                }
+            ]
+        ),
+    )
+
+    quiz_ab = client.post("/api/quiz", json={"sessionIds": [sid_a, sid_b]}).json()
+    quiz_ba = client.post("/api/quiz", json={"sessionIds": [sid_b, sid_a]}).json()
+
+    assert quiz_ab["quizId"] == quiz_ba["quizId"]

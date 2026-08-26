@@ -38,6 +38,9 @@ from backend.app.modules.ai_engine.engines import (
     NovelMode,
     SummaryGenerator,
 )
+from backend.app.modules.learning_engine.engines import LearningEngine
+from backend.app.modules.learning_engine.models import LearningEngineRequest
+from backend.app.modules.database.review import validate_learning_material
 from backend.app.modules.ai_engine.models import (
     AiExplainRequest,
     AiInput,
@@ -102,6 +105,7 @@ class AiBridge:
     explanation_engine: Any = field(default_factory=ExplanationEngine)
     summary_generator: Any = field(default_factory=SummaryGenerator)
     novel_mode: Any = field(default_factory=NovelMode)
+    learning_engine: Any = field(default_factory=LearningEngine)
 
     # Every word explained so far, in order. Fed back into later explanations so
     # the model can say "like 'gale', which you looked up on page 3" — and used
@@ -199,7 +203,8 @@ class AiBridge:
                 error="No lookups recorded this session",
             )
 
-        request = AiSessionSummaryRequest(
+        # 1. AI Engine (GROQ_API_KEY_1) for summary and words learned
+        summary_request = AiSessionSummaryRequest(
             context=ReadingContext(
                 book=self.book,
                 page_number=pages_read,
@@ -209,7 +214,39 @@ class AiBridge:
             session_history=list(self._history),
         )
 
-        return await self._run("summary_generator", self.summary_generator.summarize, request)
+        outcome = await self._run("summary_generator", self.summary_generator.summarize, summary_request)
+        
+        # 2. Learning Engine (GROQ_API_KEY_3) for quiz and flashcards
+        # This gracefully defaults to empty lists on failure, avoiding session abortion.
+        learning_request = LearningEngineRequest(
+            context=summary_request.context,
+            session_history=[{"word": h.word, "context": h.context} for h in self._history if h.context],
+            session_summary=str(outcome.data.get("session_summary", "")),
+            words_learned=outcome.data.get("words_learned", []),
+        )
+
+        try:
+            learning_response = await asyncio.wait_for(
+                asyncio.to_thread(self.learning_engine.generate, learning_request), 
+                timeout=self.timeout
+            )
+            raw_learning = {
+                "quiz": learning_response.quiz,
+                "flashcards": learning_response.flashcards,
+                "words_learned": outcome.data.get("words_learned", [])
+            }
+        except Exception as error:
+            logger.warning("[ai:learning_engine] call raised: %s", error)
+            raw_learning = {"quiz": [], "flashcards": [], "words_learned": outcome.data.get("words_learned", [])}
+
+        # 3. Validation layer
+        validated = validate_learning_material(raw_learning)
+        
+        # 4. Merge into final expected payload
+        outcome.data["quiz"] = validated["quiz"]
+        outcome.data["flashcards"] = validated["flashcards"]
+        
+        return outcome
 
     async def scene_mood(self, *, paragraph: str, page_number: int | None = None) -> AiOutcome:
         """Classify the passage's mood, for Novel Mode's ambient audio.

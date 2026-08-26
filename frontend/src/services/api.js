@@ -1,24 +1,17 @@
 // ============================================================================
 // TaleTrace — API SERVICE LAYER
 // ----------------------------------------------------------------------------
-// Pages and components only ever talk to this file, never to the backend or the
-// mock directly. That contract is what makes this file the whole integration:
+// Pages and components only ever talk to this file, never to the backend
+// directly.  That contract is what makes this file the whole integration:
 // no page or component below changed when the real backend arrived.
 //
-// Two sources, on purpose
-// -----------------------
-//   fetch()  →  everything the ESP32 rig produced or the reading engine
-//               measured: sessions, folders, the reading-speed baseline, the
-//               analysis charts, whether the device is on the network.
-//   mock     →  accounts, and the pages whose backend does not exist yet:
-//               Quizzes and Flashcards (the data is being persisted per session,
-//               but the endpoint that merges several sessions is not built).
+// Every call goes through `fetch()` to the FastAPI backend. Authentication is
+// handled by an HTTP-only cookie set during signup/login; this file never reads
+// or writes it — the browser attaches it automatically.
 //
-// Accounts stay in localStorage because there is no authentication server-side —
-// no password ever leaves the browser, and the backend holds exactly one reader.
-// So `userId` is still the first argument everywhere, and this file drops it on
-// the wire. When real auth arrives it becomes a session cookie and not one call
-// site changes.
+// `userId` is still the first argument at every call site for backward
+// compatibility with components written during the mock era. This file drops
+// it on the wire; the backend identifies the reader from the cookie.
 //
 // Shape adapting happens here and only here. The backend speaks in epoch
 // milliseconds and its own difficulty vocabulary; the pages want formatted dates
@@ -26,7 +19,7 @@
 // browser is the only thing in this system that knows the reader's timezone.
 // ============================================================================
 
-import * as mock from './mockBackend';
+
 
 const BASE = import.meta.env.VITE_API_URL ?? '/api';
 
@@ -43,6 +36,7 @@ function messageFrom(payload, status) {
 async function request(path, { method = 'GET', body } = {}) {
   const res = await fetch(`${BASE}${path}`, {
     method,
+    credentials: 'include',
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -95,39 +89,23 @@ const withDayLabels = (analysis) => ({
   ),
 });
 
-// The reading profile lives on the server; the account lives in localStorage.
-// Merged rather than replaced so a brand-new signup keeps its own
-// `profileCompleted` — that flag is what RouteGuards uses to send someone to
-// onboarding, and it is per-account state, which the server has no concept of.
-//
-// `null` fields are dropped rather than merged. A reader row the server has never
-// been told about carries `readerType: null`, and spreading that over the account
-// would deselect both Reader Type cards in Settings — the server saying "I was
-// never told" is not the same as saying "neither".
-function withProfile(user, profile) {
-  if (!user) return null;
-  const known = Object.fromEntries(Object.entries(profile).filter(([, v]) => v !== null));
-  return {
-    ...user,
-    ...known,
-    devicePrefs: { ...user.devicePrefs, ...profile.devicePrefs },
-  };
-}
-
-async function meFromServer() {
-  return request('/me');
-}
-
 export const api = {
-  // ---------------------------------------------------------------- auth (mock)
-  // The password check is local and proves nothing to the server. It exists so
-  // the app has a front door, not to protect anything.
-  signup: async (details) => withProfile(await mock.apiSignup(details), await meFromServer()),
-  login: async (credentials) => withProfile(await mock.apiLogin(credentials), await meFromServer()),
-  logout: mock.apiLogout,
+  // ---------------------------------------------------------------- auth
+  signup: async (details) => {
+    await request('/auth/signup', { method: 'POST', body: details });
+    return request('/me');
+  },
+  login: async (credentials) => {
+    await request('/auth/login', { method: 'POST', body: credentials });
+    return request('/me');
+  },
+  logout: () => request('/auth/logout', { method: 'POST' }),
   getMe: async () => {
-    const user = await mock.apiGetMe();
-    return user ? withProfile(user, await meFromServer()) : null;
+    try {
+      return await request('/me');
+    } catch (e) {
+      return null;
+    }
   },
 
   // -------------------------------------------------------------- profile setup
@@ -147,23 +125,16 @@ export const api = {
     return profile.devicePrefs;
   },
 
-  // Two writes, because the two halves live in two places: the reader type is a
-  // reading setting the engine will consult, and `profileCompleted` is onboarding
-  // state that belongs to the account. The mock call is what lets RouteGuards
-  // stop redirecting to /setup.
-  submitReaderType: async (userId, readerType) => {
-    const profile = await request('/me', { method: 'PATCH', body: { readerType } });
-    return withProfile(await mock.apiSubmitReaderType(userId, readerType), profile);
+  submitReaderType: async (_userId, readerType) => {
+    return request('/me', { method: 'PATCH', body: { readerType } });
   },
 
   // ------------------------------------------------------------------- settings
-  updateSettings: async (userId, patch) => {
-    const { devicePrefs, readerType, theme, ...account } = patch;
-    const profile = await request('/me', {
+  updateSettings: async (_userId, patch) => {
+    return request('/me', {
       method: 'PATCH',
-      body: { devicePrefs, readerType, theme },
+      body: patch,
     });
-    return withProfile(await mock.apiUpdateSettings(userId, account), profile);
   },
 
   // --------------------------------------------------------- dashboard / analysis
@@ -205,12 +176,16 @@ export const api = {
   moveSession: (_userId, sessionId, folderId) =>
     request(`/sessions/${sessionId}`, { method: 'PATCH', body: { folderId } }),
 
-  // ------------------------------------------------------- quiz / flashcards (mock)
-  // The real data for these is already being written — every finished session
-  // stores the flashcards, quiz and words-learned the AI Engine produced. What is
-  // missing is the endpoint that merges several sessions' worth, so no new AI call
-  // is ever needed. Until then these are the sample banks.
-  generateQuiz: mock.apiGenerateQuiz,
-  submitQuiz: mock.apiSubmitQuiz,
-  generateFlashcards: mock.apiGenerateFlashcards,
+  // -------------------------------------------------------------- quiz / flashcards
+  // Merged from what each session already stored. The AI Engine wrote the quiz and
+  // the cards when the session ended; pressing "Generate" selects and merges rows,
+  // and never causes a new AI call.
+  //
+  // The answer key is not in this file, this bundle, or the browser. `quizId` is
+  // what lets the server rebuild it at submit time — see `review.quiz_id`.
+  generateQuiz: (_userId, sessionIds) => request('/quiz', { method: 'POST', body: { sessionIds } }),
+  submitQuiz: (_userId, quizId, answers) =>
+    request('/quiz/submit', { method: 'POST', body: { quizId, answers } }),
+  generateFlashcards: (_userId, sessionIds) =>
+    request('/flashcards', { method: 'POST', body: { sessionIds } }),
 };

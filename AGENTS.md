@@ -189,8 +189,8 @@ python -m backend.app.simulated_session     # without it
 python scripts/dev.py                       # then open the Local: URL Vite prints
 
 # tests
-python -m pytest                            # 703 passed
-cd frontend && npm test                     # 7 passed (vitest)
+python -m pytest                            # 720 passed
+cd frontend && npm test                     # 14 passed (vitest)
 python scripts/verify_all.py                # the end-to-end gate
 
 # the demo corpus in taletrace.db
@@ -214,16 +214,23 @@ re-running `seed_history.py --reset`, never by hand.
 | Real, from the backend | Still `mockBackend.js` |
 |---|---|
 | reader profile and settings | accounts: signup / login / logout |
-| device status (a live probe of the rig) | quizzes: generation and scoring |
-| dashboard | flashcards |
+| device status (a live probe of the rig) | |
+| dashboard | |
 | **all five Analysis charts** | |
 | sessions, folders, session details | |
 | reading-speed test and baseline | |
+| **quizzes: generation, scoring, merge** | |
+| **flashcards: generation, dedup, merge** | |
 
-Quizzes and flashcards are mocked *only at the merge step*. Their real content
-is already persisted per session in `review_payload` by the AI Engine — serving
-them needs an endpoint that merges several sessions' payloads, and **no new AI
-call, ever**.
+Quizzes and flashcards are served from persisted `review_payload` blobs that
+the AI Engine wrote when each session ended. "Generate Quiz" merges rows; it
+never causes a new AI call. The answer key stays server-side — the browser
+holds only a `quizId` that lets the server rebuild it at submit time.
+
+A subset of the seeded sessions (the Biology and English ones) carry
+handcrafted `review_payload` fixtures so the Quiz and Flashcards pages work
+against the demo corpus without a Groq key. Sessions without lookups return
+a 404 with a human-readable explanation.
 
 Accounts are in `localStorage` because there is no server-side authentication
 yet. No password reaches the server. Nothing here may be exposed to a network
@@ -235,8 +242,9 @@ until that changes.
 
 The user's ordering. Do not reorder without asking.
 
-1. **Quizzes and Flashcards from persisted `review_payload`** — a merge
-   endpoint over existing rows. No new AI call.
+1. ~~**Quizzes and Flashcards from persisted `review_payload`**~~ — **done.**
+   Merge endpoint over existing rows, deterministic seed fixtures, full test
+   coverage (backend 720 tests, frontend 14 tests), no new AI call.
 2. **Database schema cleanup** — six legacy tables are dead and unwritten:
    `ocr_results`, `selected_words`, `ai_responses`, `flashcards`, `quizzes`,
    `reading_statistics`. `review_payload` is the canonical store; drop them.
@@ -244,8 +252,8 @@ The user's ordering. Do not reorder without asking.
    this lands, the server holds exactly one reader (`local-reader`) and `api.js`
    drops the `userId` argument on the wire; when auth arrives that argument
    becomes a session cookie with no call-site changes.
-4. **Remove the remaining mocks** feature by feature: `login`/`signup`,
-   `generateQuiz`, `submitQuiz`, `generateFlashcards`.
+4. **Remove the remaining mocks** feature by feature: `login`/`signup`.
+   (`generateQuiz`, `submitQuiz`, `generateFlashcards` are already real.)
 5. **Hardware validation** — ESP32-CAM, both buttons, the device loop, on the
    real rig.
 6. **Final demo / end-to-end rehearsal.**
