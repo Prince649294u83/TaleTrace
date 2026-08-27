@@ -104,8 +104,10 @@ harnesses.
 | pip | any recent | |
 | Git | any | |
 | Node.js | **20+** | only for the website (`scripts/dev.py`, `npm run dev`). The reading engine needs none of it. |
-| Google Cloud Vision API key | — | only for live OCR; every offline command runs without it |
+| OCR.Space API key | — | primary engine for live OCR; offline commands run without it |
+| Google Cloud Vision API key | — | fallback engine for live OCR |
 | Groq API keys (×2) | — | only for text reconstruction and Meaning Mode |
+| Freesound API key | — | optional, for dynamic ambient audio retrieval |
 | ESP32-CAM + ESP32 DevKit | — | only for a live session |
 
 The dependency versions in `requirements.txt` are **capped on purpose** and the
@@ -158,10 +160,12 @@ Everything in `.env` is optional except where noted:
 
 | Variable | Needed for | Absent behaviour |
 |---|---|---|
-| `GOOGLE_VISION_API_KEY` | **Live OCR. The one non-optional key.** | A live session has no text at all. Offline commands use recorded responses and do not care. |
+| `OCR_SPACE_API_KEY` | **Live OCR (Primary).** | Falls back to Google Vision if absent. |
+| `GOOGLE_VISION_API_KEY` | **Live OCR (Fallback).** | A live session has no text at all if both OCR keys are absent. Offline commands use recorded responses. |
 | `GROQ_API_KEY_1` | AI Engine only — Meaning Mode, explanations, session review | Meaning Mode cannot explain a word. Reading still works. |
 | `GROQ_API_KEY_2` | Merge Engine only — text reconstruction, OCR cleanup, same-page detection | Page text falls back to raw OCR; page turns use geometry alone. Reading still works. |
 | `GROQ_API_KEY` | Legacy single key | Read only where the two above are unset, so an old `.env` keeps working. |
+| `FREESOUND_API_KEY` | Dynamic ambient audio fallback | Falls back to the local curated starter pack or silence. |
 | `ESP32_CAM_CAPTURE_URL` | Live camera, e.g. `http://192.168.1.200/capture` | Reported unconfigured; the runtime still starts. |
 | `ESP32_BUTTONS_URL` | Live buttons, e.g. `http://192.168.1.26:8080/buttons` | Reported unconfigured; a live session substitutes a scheduled reader (see §4). |
 | `AUDIO_PROVIDER` | `edge` (default, neural voices, needs network), `offline` (pyttsx3, OS voices), `fake` (tests) | |
@@ -755,7 +759,7 @@ are read, not run.
 |---|---|---|
 | `pip install` fails on mediapipe | Python 3.13+ | Use Python 3.12. |
 | Gesture detection only ever uses the HSV fallback | mediapipe was upgraded past 0.10.21 | `pip install "mediapipe<0.10.30" "numpy<2"`. See §1.1. |
-| `Cannot start: OCR has no API key` | `GOOGLE_VISION_API_KEY` empty | Set it in `.env`, or run an offline command. |
+| `Cannot start: OCR has no API key` | `OCR_SPACE_API_KEY` and `GOOGLE_VISION_API_KEY` empty | Set one in `.env`, or run an offline command. |
 | `Cannot start: no camera` | camera unreachable | `curl http://<cam-ip>/capture`. Check power, Wi-Fi, and that the URL includes `/capture`. |
 | Live session runs but gesture count is 0 | buttons unreachable and `--buttons hardware` given | Drop the flag, or fix the endpoint. `--check` says which. |
 | `frames lost` is most of `frames read` | Wi-Fi, not OCR | Move the camera closer to the router; lower the frame size in the sketch. |
