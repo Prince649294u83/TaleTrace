@@ -83,7 +83,8 @@ def fetch_once(
     if not key:
         raise SystemExit(
             "GOOGLE_VISION_API_KEY is not set and no cached OCR exists for this image.\n"
-            "OCR is the one hard dependency: without it there is no text to validate."
+            "This script caches Vision responses specifically.  For live OCR, set\n"
+            "OCR_SPACE_API_KEY (prototype) or GOOGLE_VISION_API_KEY (fallback)."
         )
 
     import base64

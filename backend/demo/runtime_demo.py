@@ -461,7 +461,7 @@ class RuntimeSimulation:
             # A real selection: fingertip -> selector -> published event ->
             # drained into the engine. The pointer this moves was moved by
             # Gesture, not by this script.
-            result = await self.runtime.feed_gesture_frame(
+            result, _ = await self.runtime.feed_gesture_frame(
                 self.frame, finger=self.fingertip_on_line(0, column=1)
             )
             word = result.selected_word or result.status.value

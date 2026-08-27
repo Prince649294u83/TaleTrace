@@ -45,6 +45,47 @@ _TRAILING_WORD = re.compile(r'([A-Za-z]+)\.["\'”’)\]]*$')
 # Rough speaking pace for duration estimates.
 _WORDS_PER_MINUTE = 150.0
 
+_TTS_CHAR_LIMIT = 200
+
+def _chunk_for_tts(sentence: str, limit: int = _TTS_CHAR_LIMIT) -> list[tuple[str, int]]:
+    if not sentence.strip():
+        return []
+
+    if len(sentence) <= limit:
+        return [(sentence.strip(), sentence.find(sentence.strip()))] if sentence.strip() else []
+
+    chunks = []
+    cursor = 0
+    while cursor < len(sentence):
+        # The chunk is sentence[cursor:cursor+limit], but find a good break
+        end = min(cursor + limit, len(sentence))
+        if end < len(sentence):
+            # Look for natural break point
+            segment = sentence[cursor:end]
+            split_at = -1
+            for delim in (',', ';', ':', ' \u2014', ' \u2013'):
+                idx = segment.rfind(delim)
+                if idx > 0:
+                    split_at = idx + len(delim)
+                    break
+            if split_at <= 0:
+                split_at = segment.rfind(' ')
+            if split_at <= 0:
+                split_at = len(segment)
+            chunk_text = sentence[cursor:cursor + split_at].strip()
+            if chunk_text:
+                chunks.append((chunk_text, cursor))
+            cursor += split_at
+            # Skip leading whitespace for next chunk
+            while cursor < len(sentence) and sentence[cursor] == ' ':
+                cursor += 1
+        else:
+            chunk_text = sentence[cursor:end].strip()
+            if chunk_text:
+                chunks.append((chunk_text, cursor))
+            cursor = end
+    return chunks
+
 
 def _ends_with_abbreviation(text: str) -> bool:
     """True when `text` ends in an abbreviation rather than a real terminator.
@@ -106,19 +147,21 @@ def segment_sentences(
     chunks: list[SentenceChunk] = []
 
     for offset, piece in enumerate(pieces):
-        pointer = base.model_copy(
-            update={
-                "sentence_index": base.sentence_index + offset,
-                "character_offset": 0,
-            }
-        )
-        chunks.append(
-            SentenceChunk(
-                text=piece,
-                pointer=pointer,
-                duration_estimate_ms=estimate_duration_ms(piece, rate),
+        sub_chunks = _chunk_for_tts(piece)
+        for sub_text, char_offset in sub_chunks:
+            pointer = base.model_copy(
+                update={
+                    "sentence_index": base.sentence_index + offset,
+                    "character_offset": char_offset,
+                }
             )
-        )
+            chunks.append(
+                SentenceChunk(
+                    text=sub_text,
+                    pointer=pointer,
+                    duration_estimate_ms=estimate_duration_ms(sub_text, rate),
+                )
+            )
 
     return chunks
 

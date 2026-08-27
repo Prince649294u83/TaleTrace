@@ -38,6 +38,8 @@ from backend.app.modules.audio_engine.models import (
 )
 from backend.app.modules.audio_engine.pointer_manager import PointerManager
 from backend.app.modules.audio_engine.sentence_queue import SentenceQueue, segment_sentences
+from backend.app.modules.audio_engine.interfaces import AmbientProviderInterface
+from backend.app.modules.audio_engine.scene_controller import SceneController
 from backend.app.modules.audio_engine.speech_provider import (
     AudioSink,
     NullAudioSink,
@@ -88,6 +90,8 @@ class PlaybackEngine:
         auto_advance: bool = True,
         session_id: str = "default",
         clock: Callable[[], float] = time.monotonic,
+        ambient_provider: AmbientProviderInterface | None = None,
+        scene_controller: SceneController | None = None,
     ) -> None:
         # `auto_advance=False` lets tests drive the loop one sentence at a time.
         self._provider = provider if provider is not None else get_provider()
@@ -98,6 +102,9 @@ class PlaybackEngine:
         self._auto_advance = auto_advance
         self._session_id = session_id
         self._clock = clock
+        
+        self._ambient = ambient_provider
+        self._scene = scene_controller
 
         self._profile: AudioProfile = get_profile(None)
         self._voice_id: str | None = None
@@ -208,7 +215,23 @@ class PlaybackEngine:
             )
 
         self._spawn_loop()
+        
+        # Fire and forget scene evaluation + crossfade
+        if self._scene and self._ambient:
+            asyncio.create_task(self._ambient_fire_and_forget(pointer, text))
+
         return self._machine.state
+
+    async def _ambient_fire_and_forget(self, pointer: ReadingPointer, text: str) -> None:
+        """Evaluates scene and crossfades ambient track without blocking TTS."""
+        if not self._scene or not self._ambient:
+            return
+        
+        try:
+            decision = await self._scene.evaluate(pointer=pointer, paragraph=text)
+            await self._ambient.crossfade(decision)
+        except Exception as e:
+            logger.error("Ambient scene evaluation failed: %s", e)
 
     async def pause(self, *, reason: PauseReason = PauseReason.USER) -> PlaybackState:
         """Suspend playback, preserving the pointer.
@@ -241,6 +264,8 @@ class PlaybackEngine:
             )
 
         await self._sink.stop()
+        if self._ambient:
+            await self._ambient.pause()
         return self._machine.state
 
     async def resume(self) -> PlaybackState:
@@ -266,6 +291,8 @@ class PlaybackEngine:
             self._log("resumed", next_sentence=head.text[:40] if head else None)
 
         self._spawn_loop()
+        if self._ambient:
+            await self._ambient.resume()
         return self._machine.state
 
     async def stop(self) -> PlaybackState:
@@ -294,6 +321,8 @@ class PlaybackEngine:
 
         await self._sink.stop()
         await self._cancel_loop()
+        if self._ambient:
+            await self._ambient.stop()
         return self._machine.state
 
     # ---------- pointer changes ----------

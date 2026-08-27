@@ -97,3 +97,18 @@ class ButtonSource(Protocol):
         poll rather than tracked separately, so it cannot disagree with the edges.
         """
         ...
+
+
+@runtime_checkable
+class DisplayTarget(Protocol):
+    """A target that can show text on a physical display.
+
+    The ESP32's OLED is the production implementation.  A ``FakeDisplay`` that
+    records calls is the test one.  Failures are non-fatal: a missing or
+    unreachable display logs a warning and reading continues.
+    """
+
+    async def show(self, text: str) -> None:
+        """Send text to the display.  Must not raise on failure."""
+        ...
+

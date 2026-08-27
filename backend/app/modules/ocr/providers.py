@@ -1,23 +1,24 @@
-"""Google Vision: the one OCR engine in production.
+"""OCR providers: OCR.Space (prototype) and Google Vision (fallback).
 
-Migrated from the standalone `OCRandGESTURE/Gesture/ocr/` tree. The recognition
-logic is preserved as written — the hierarchical walk over Vision's response is
-the part that was actually tuned against real pages, and rewriting it would throw
-away the only thing that had been tested on real books.
+The prototype reads pages with OCR.Space Engine 2, validated end-to-end through
+the gesture pipeline on a real pointing photograph.  Google Vision is the
+fallback when the OCR.Space key is absent but a Vision key is available.
 
-There is deliberately no provider registry and no way to select an engine at
-runtime. Production reads pages with Google Vision, full stop:
+    ESP32 -> OpenCV -> OCR.Space Engine 2 -> parser -> Merge Engine -> Merge Memory
+    (fallback)        Google Vision
 
-    ESP32 -> OpenCV -> Google Vision -> parser -> Merge Engine -> Merge Memory
+Provider selection is configuration-level only: ``get_ocr_engine`` looks at which
+keys are set and picks one provider for the session.  A transient API failure
+from OCR.Space does *not* trigger an automatic switch to Vision mid-session —
+the pipeline retries or drops the frame, and the operator chooses the fallback
+by clearing the OCR.Space key.
 
-PaddleOCR is gone. Choosing between OCR engines at runtime meant every downstream
-consumer's behaviour depended on which engine happened to be configured, and only
-one of them was ever tuned against real books.
+Google Vision’s recognition logic is preserved as written — the hierarchical
+walk over Vision’s response is the part tuned against real pages.
 
-Tests and demos do not use this file's network path; they use
-`ocr/replay.py`, which feeds recorded Vision responses through
-`GoogleVisionProvider.parse_response` — the same parser used here. It is not a
-provider and the runtime cannot select it.
+Tests and demos use ``ocr/replay.py``, which feeds recorded Vision responses
+through ``GoogleVisionProvider.parse_response`` — the same parser used here.
+OCR.Space responses are replayed through ``OcrSpaceProvider.parse_response``.
 
 What changed from the standalone
 --------------------------------
@@ -214,18 +215,38 @@ class GoogleVisionProvider:
         return words
 
 
-def get_ocr_engine(**kwargs: Any) -> GoogleVisionProvider:
-    """The production OCR engine. Always Google Vision.
+def get_ocr_engine(**kwargs: Any) -> Any:
+    """The OCR engine for this session.
 
-    Takes no name and reads no `OCR_PROVIDER` variable: there is nothing to
-    choose between, and that is the point. A misspelt environment variable can no
-    longer silently change which engine reads the page.
+    OCR.Space Engine 2 is the prototype provider, selected when
+    ``OCR_SPACE_API_KEY`` is set.  Google Vision is the fallback, selected
+    when only ``GOOGLE_VISION_API_KEY`` is set.  When neither key is present,
+    OCR.Space is returned anyway so the error names the prototype key.
+
+    Takes no ``OCR_PROVIDER`` variable: the selection is which key is set,
+    not a string that could be misspelt.  The fallback is config-level:
+    a transient OCR.Space failure does *not* switch to Vision mid-session.
 
     Returns the engine without probing it, so constructing the runtime never
     makes a network call. The credential is checked when a frame is submitted.
     """
 
-    return GoogleVisionProvider(**kwargs)
+    ocr_space_key = os.environ.get("OCR_SPACE_API_KEY", "").strip()
+    vision_key = os.environ.get("GOOGLE_VISION_API_KEY", "").strip()
+
+    if ocr_space_key:
+        from backend.app.modules.ocr.ocr_space import OcrSpaceProvider
+
+        return OcrSpaceProvider(api_key=ocr_space_key, **kwargs)
+
+    if vision_key:
+        return GoogleVisionProvider(api_key=vision_key, **kwargs)
+
+    # No key at all — return OCR.Space so the error names the prototype key,
+    # not the legacy one.
+    from backend.app.modules.ocr.ocr_space import OcrSpaceProvider
+
+    return OcrSpaceProvider(**kwargs)
 
 
 def _vertices_to_bbox(bounding: dict[str, Any]) -> tuple[int, int, int, int]:

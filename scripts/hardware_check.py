@@ -48,11 +48,16 @@ def _check_software():
     else:
         print("[FAIL] .env file missing")
 
+    ocr_space = os.environ.get("OCR_SPACE_API_KEY")
     google_vision = os.environ.get("GOOGLE_VISION_API_KEY")
-    if google_vision:
-        print("[PASS] GOOGLE_VISION_API_KEY configured")
+    if ocr_space and google_vision:
+        print("[PASS] OCR configured: OCR.Space Engine 2 (primary), Vision (fallback)")
+    elif ocr_space:
+        print("[PASS] OCR configured: OCR.Space Engine 2")
+    elif google_vision:
+        print("[PASS] OCR configured: Google Vision (fallback)")
     else:
-        print("[WARN] GOOGLE_VISION_API_KEY not configured")
+        print("[WARN] No OCR key configured -- set OCR_SPACE_API_KEY or GOOGLE_VISION_API_KEY")
 
     groq_1 = os.environ.get("GROQ_API_KEY_1")
     if groq_1:
@@ -72,7 +77,8 @@ def _check_software():
     else:
         print("[WARN] GROQ_API_KEY_3 not configured — quiz/flashcards will gracefully degrade")
 
-    groq_model = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+    from backend.app.shared.groq_keys import chat_model
+    groq_model = chat_model()
     if groq_model:
         print(f"[PASS] GROQ_MODEL = {groq_model}")
     else:
@@ -181,48 +187,80 @@ def _check_hardware():
     print("Hardware")
     
     import requests
+    import time
     hardware_attached = False
 
     cam_url = os.environ.get("ESP32_CAM_CAPTURE_URL")
     if not cam_url:
         print("[WARN] ESP32-CAM: NOT CONFIGURED")
     else:
-        try:
-            resp = requests.get(cam_url, timeout=3.0)
-            if resp.status_code == 200 and 'image/jpeg' in resp.headers.get('Content-Type', '') and len(resp.content) > 0:
-                print("[PASS] ESP32-CAM: ATTACHED")
-                hardware_attached = True
-            else:
-                print("[WARN] ESP32-CAM: UNREACHABLE / BAD CONTENT")
-                print(f"       (GET {cam_url} returned status {resp.status_code})")
-        except requests.RequestException:
-            print("[WARN] ESP32-CAM: NOT ATTACHED / UNREACHABLE")
-            print(f"       (GET {cam_url} failed)")
-            print("       Meaning: device may be powered off, disconnected, or on another network.")
+        cam_attached = False
+        for attempt in range(5):
+            try:
+                resp = requests.get(cam_url, timeout=3.0)
+                if resp.status_code == 200 and 'image/jpeg' in resp.headers.get('Content-Type', '') and len(resp.content) > 0:
+                    print("[PASS] ESP32-CAM: ATTACHED")
+                    hardware_attached = True
+                    cam_attached = True
+                    break
+            except requests.RequestException:
+                pass
+            if attempt < 4:
+                time.sleep(1.0)
+                
+        if not cam_attached:
+            try:
+                resp = requests.get(cam_url, timeout=3.0)
+                if resp.status_code == 200 and 'image/jpeg' in resp.headers.get('Content-Type', '') and len(resp.content) > 0:
+                    pass
+                else:
+                    print("[WARN] ESP32-CAM: UNREACHABLE / BAD CONTENT")
+                    print(f"       (GET {cam_url} returned status {resp.status_code})")
+            except requests.RequestException:
+                print("[WARN] ESP32-CAM: NOT ATTACHED / UNREACHABLE")
+                print(f"       (GET {cam_url} failed after retries)")
+                print("       Meaning: device may be powered off, disconnected, or on another network.")
 
     btn_url = os.environ.get("ESP32_BUTTONS_URL")
     if not btn_url:
         print("[WARN] ESP32 buttons: NOT CONFIGURED")
     else:
-        try:
-            resp = requests.get(btn_url, timeout=3.0)
-            if resp.status_code == 200:
-                try:
-                    data = resp.json()
-                    if isinstance(data, dict):
-                        print("[PASS] ESP32 buttons: ATTACHED")
-                        hardware_attached = True
-                    else:
-                        print("[WARN] ESP32 buttons: INVALID JSON SHAPE")
-                        print(f"       (GET {btn_url} returned {type(data)})")
-                except ValueError:
-                    print("[WARN] ESP32 buttons: INVALID JSON")
-            else:
-                print("[WARN] ESP32 buttons: UNREACHABLE / BAD STATUS")
-                print(f"       (GET {btn_url} returned status {resp.status_code})")
-        except requests.RequestException:
-            print("[WARN] ESP32 buttons: NOT ATTACHED / UNREACHABLE")
-            print(f"       (GET {btn_url} failed)")
+        btn_attached = False
+        for attempt in range(5):
+            try:
+                resp = requests.get(btn_url, timeout=3.0)
+                if resp.status_code == 200:
+                    try:
+                        data = resp.json()
+                        if isinstance(data, dict):
+                            print("[PASS] ESP32 buttons: ATTACHED")
+                            hardware_attached = True
+                            btn_attached = True
+                            break
+                    except ValueError:
+                        pass
+            except requests.RequestException:
+                pass
+            if attempt < 4:
+                time.sleep(1.0)
+                
+        if not btn_attached:
+            try:
+                resp = requests.get(btn_url, timeout=3.0)
+                if resp.status_code == 200:
+                    try:
+                        data = resp.json()
+                        if not isinstance(data, dict):
+                            print("[WARN] ESP32 buttons: INVALID JSON SHAPE")
+                            print(f"       (GET {btn_url} returned {type(data)})")
+                    except ValueError:
+                        print("[WARN] ESP32 buttons: INVALID JSON")
+                else:
+                    print("[WARN] ESP32 buttons: UNREACHABLE / BAD STATUS")
+                    print(f"       (GET {btn_url} returned status {resp.status_code})")
+            except requests.RequestException:
+                print("[WARN] ESP32 buttons: NOT ATTACHED / UNREACHABLE")
+                print(f"       (GET {btn_url} failed after retries)")
 
     print("=" * 50)
     if hardware_attached:
@@ -232,6 +270,8 @@ def _check_hardware():
     print("=" * 50)
 
 if __name__ == "__main__":
+    from backend.app.core.environment import load_environment
+    load_environment()
     _print_header("TaleTrace Hardware Diagnostics")
     _check_software()
     _check_source_integrity()

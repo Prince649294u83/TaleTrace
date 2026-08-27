@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaleTrace Camera Preview</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            margin: 0;
+        }
+        h1 {
+            margin-bottom: 0.5rem;
+        }
+        p {
+            color: #a0a0a0;
+            margin-bottom: 2rem;
+        }
+        .preview-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            aspect-ratio: 4/3;
+            background-color: #1e1e1e;
+            border: 2px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #camera-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+        }
+        .status-overlay {
+            position: absolute;
+            font-size: 1.2rem;
+            color: #888;
+        }
+        .controls {
+            margin-top: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #2563eb;
+        }
+        button:disabled {
+            background-color: #4b5563;
+            cursor: not-allowed;
+        }
+        .rate-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        select {
+            background-color: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        .error-message {
+            color: #ef4444;
+            margin-top: 1rem;
+            text-align: center;
+            max-width: 600px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Camera Preview</h1>
+    <p>Live feed from the ESP32-CAM via the TaleTrace backend.</p>
+
+    <div class="preview-container">
+        <div id="status-text" class="status-overlay">Press Start to connect</div>
+        <img id="camera-feed" alt="Camera Feed">
+    </div>
+
+    <div class="controls">
+        <button id="toggle-btn">Start Preview</button>
+        <div class="rate-control">
+            <label for="refresh-rate">Refresh:</label>
+            <select id="refresh-rate">
+                <option value="200">5 fps (Fast)</option>
+                <option value="500" selected>2 fps (Normal)</option>
+                <option value="1000">1 fps (Slow)</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="error-msg" class="error-message"></div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000/api/debug/camera";
+        
+        const feed = document.getElementById("camera-feed");
+        const statusText = document.getElementById("status-text");
+        const toggleBtn = document.getElementById("toggle-btn");
+        const rateSelect = document.getElementById("refresh-rate");
+        const errorMsg = document.getElementById("error-msg");
+
+        let isPlaying = false;
+        let updateTimeout = null;
+        let activeRequest = false;
+
+        function setStatus(text, isError = false) {
+            statusText.textContent = text;
+            statusText.style.display = text ? "block" : "none";
+            feed.style.display = text ? "none" : "block";
+            
+            if (isError) {
+                errorMsg.textContent = text;
+                statusText.style.display = "none";
+            } else {
+                errorMsg.textContent = "";
+            }
+        }
+
+        async function fetchFrame() {
+            if (!isPlaying || activeRequest) return;
+            
+            activeRequest = true;
+            try {
+                // Add timestamp to prevent browser caching
+                const ts = new Date().getTime();
+                const response = await fetch(`${API_URL}?t=${ts}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+                }
+                
+                const blob = await response.blob();
+                const objUrl = URL.createObjectURL(blob);
+                
+                // Clean up previous URL to avoid memory leaks
+                if (feed.src && feed.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(feed.src);
+                }
+                
+                feed.src = objUrl;
+                setStatus(""); // clear status text to show image
+                
+            } catch (err) {
+                console.error("Frame fetch error:", err);
+                setStatus(`Connection error: ${err.message}`, true);
+                stopPreview();
+            } finally {
+                activeRequest = false;
+                if (isPlaying) {
+                    const delay = parseInt(rateSelect.value, 10);
+                    updateTimeout = setTimeout(fetchFrame, delay);
+                }
+            }
+        }
+
+        function startPreview() {
+            isPlaying = true;
+            toggleBtn.textContent = "Stop Preview";
+            toggleBtn.style.backgroundColor = "#ef4444";
+            setStatus("Connecting...");
+            fetchFrame();
+        }
+
+        function stopPreview() {
+            isPlaying = false;
+            if (updateTimeout) {
+                clearTimeout(updateTimeout);
+                updateTimeout = null;
+            }
+            toggleBtn.textContent = "Start Preview";
+            toggleBtn.style.backgroundColor = "#3b82f6";
+            
+            // Wait for any active request to finish before showing status
+            setTimeout(() => {
+                if (!isPlaying) setStatus("Preview stopped");
+            }, 100);
+        }
+
+        toggleBtn.addEventListener("click", () => {
+            if (isPlaying) {
+                stopPreview();
+            } else {
+                startPreview();
+            }
+        });
+
+        // Ensure cleanup when user closes or reloads the page
+        window.addEventListener("beforeunload", () => {
+            stopPreview();
+        });
+    </script>
+</body>
+</html>

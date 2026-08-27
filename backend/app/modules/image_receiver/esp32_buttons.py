@@ -59,6 +59,10 @@ class Esp32Buttons:
     """Polls the ESP32 button endpoint and reports state changes as events.
 
     Holds the previous poll so it can report edges. One instance per session.
+
+    Also implements ``DisplayTarget``: the same ESP32 serves the OLED at
+    ``/display``, and wiring display alongside buttons keeps a single HTTP
+    session to one device.
     """
 
     source_name = "esp32_buttons"
@@ -69,9 +73,13 @@ class Esp32Buttons:
         *,
         timeout: float = _POLL_TIMEOUT,
         session: Any = None,
+        display_url: str | None = None,
     ) -> None:
         self.buttons_url = (
             buttons_url if buttons_url is not None else os.environ.get("ESP32_BUTTONS_URL", "")
+        )
+        self.display_url = (
+            display_url if display_url is not None else os.environ.get("ESP32_DISPLAY_URL", "")
         )
         self.timeout = timeout
         self._session = session
@@ -81,6 +89,11 @@ class Esp32Buttons:
     @property
     def configured(self) -> bool:
         return bool(self.buttons_url)
+
+    @property
+    def display_configured(self) -> bool:
+        """Whether a display endpoint was provided."""
+        return bool(self.display_url)
 
     @property
     def meaning_mode(self) -> bool:
@@ -166,3 +179,52 @@ class Esp32Buttons:
 
         self._previous = current
         return events
+
+    # -------------------------------------------------------------------- OLED
+
+    @staticmethod
+    def _normalize_oled_text(text: str, max_length: int = 200) -> str:
+        """Normalize text for the 128x64 SH1106 OLED.
+
+        Strips whitespace, replaces newlines with spaces, and truncates with
+        an ellipsis if longer than ``max_length``.  The firmware renders the
+        text as-is, so this is where the backend adapts.
+        """
+
+        cleaned = " ".join(text.split())
+        if len(cleaned) > max_length:
+            return cleaned[: max_length - 3] + "..."
+        return cleaned
+
+    async def show(self, text: str) -> None:
+        """Send text to the ESP32 OLED display.  Never raises.
+
+        Wire format: ``POST /display`` with ``Content-Type: text/plain`` and
+        the text as the raw body.  The firmware reads it via
+        ``server.arg("plain")``.  Sending JSON would silently fail.
+
+        Failures are logged and swallowed — a dead display must not stop
+        a reading session.
+        """
+
+        if not self.display_configured:
+            return
+
+        display_text = self._normalize_oled_text(text)
+        if not display_text:
+            return
+
+        try:
+            response = self._http().post(
+                self.display_url,
+                data=display_text,
+                headers={"Content-Type": "text/plain"},
+                timeout=2.0,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    "OLED display returned %d: %s", response.status_code, response.text[:100]
+                )
+        except Exception as error:
+            logger.debug("OLED display unreachable: %s", error)
+

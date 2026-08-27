@@ -419,7 +419,7 @@ async def run(args: argparse.Namespace) -> int:
 
     stage.check("a fingertip was found in the photograph", finger is not None)
 
-    selection = await runtime.feed_gesture_frame(image, finger=finger)
+    selection, _ = await runtime.feed_gesture_frame(image, finger=finger)
     report.field("status", selection.status.value)
     report.field("selected word", repr(selection.selected_word))
     report.field("selection confidence", f"{selection.confidence:.3f}")

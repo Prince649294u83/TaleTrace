@@ -80,6 +80,24 @@ class RuntimeEvent:
     source: str = "reading_engine"
 
 
+@dataclass(frozen=True)
+class MeaningLookupResult:
+    """The result of a meaning lookup, crossing the engine/device boundary.
+
+    DeviceLoop uses this to decide what to send to the OLED.  The engine
+    builds it; the loop consumes it.  Neither reaches into the other's state.
+
+    ``oled_text`` is the short-form explanation for the 128x64 SH1106 display.
+    ``full_explanation`` is the long-form for TTS narration and the website.
+    ``success`` is False when the AI call failed or no word was resolved.
+    """
+
+    target_word: str
+    oled_text: str
+    full_explanation: str
+    success: bool
+
+
 @dataclass
 class ReadingEngine:
     """Owns the session. Sequences the modules. Writes the pointer.
@@ -541,7 +559,7 @@ class ReadingEngine:
             self._record(SessionEvent.WORD_SELECTED, self._last_selected_word)
 
         elif event is SessionEvent.MEANING_REQUESTED:
-            await self.meaning_mode_on(
+            return await self.meaning_mode_on(
                 word=str(payload.get("word", "")),
                 paragraph_index=payload.get("paragraph_index"),
             )
@@ -553,7 +571,7 @@ class ReadingEngine:
 
     async def meaning_mode_on(
         self, *, word: str = "", paragraph_index: int | None = None
-    ) -> None:
+    ) -> MeaningLookupResult | None:
         """MEANING_MODE_ON. A pause that is a statement about the text.
 
         Counted apart from an ordinary pause because they mean opposite things: a
@@ -564,10 +582,14 @@ class ReadingEngine:
         into Merge Memory's coordinates. It steers the explanation only: the
         friction is still charged to the paragraph the reader was *reading*, since
         reaching ahead to ask about a word is evidence about here, not about there.
+
+        Returns a ``MeaningLookupResult`` when the AI produced an explanation,
+        ``None`` otherwise.  The caller (DeviceLoop) uses this to decide what
+        to send to the OLED without reaching into engine state.
         """
 
         if self._state.is_meaning_mode:
-            return
+            return None
 
         target = word or self._last_selected_word
 
@@ -596,11 +618,18 @@ class ReadingEngine:
                 # failed call means the reader asked and got nothing, which is
                 # not evidence about the page's difficulty.
                 self.lookup_completed(target)
+                return MeaningLookupResult(
+                    target_word=target,
+                    oled_text=self._explanation.oled_text,
+                    full_explanation=self._explanation.explanation,
+                    success=True,
+                )
             else:
                 self._record(
                     SessionEvent.MEANING_MODE_ON,
                     f"explanation unavailable — {self._explanation.error}",
                 )
+        return None
 
     async def meaning_mode_off(self) -> None:
         """MEANING_MODE_OFF. Resumes the interrupted sentence, not the next one."""

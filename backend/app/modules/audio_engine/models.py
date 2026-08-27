@@ -214,3 +214,20 @@ class PlaybackStatus(BaseModel):
     elapsed_reading_ms: int = 0
     statistics: PlaybackStatistics = Field(default_factory=PlaybackStatistics)
     error: str | None = None
+
+
+class SceneDecision(BaseModel):
+    """The result of a scene-mood evaluation for one paragraph.
+
+    ``audio_tag`` is the scene identity — changes in ``emotion`` or
+    ``intensity`` within the same tag adjust volume without restarting the
+    track.  A different ``audio_tag`` triggers a crossfade.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    scene_mood: str = "neutral_narration"
+    emotion: str = "neutral"
+    intensity: float = 0.3
+    audio_tag: str = "sfx_soft_ambient.mp3"
+

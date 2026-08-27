@@ -191,43 +191,25 @@ class NovelMode:
 
     capability = "novel_mode"
 
-    AUDIO_TAGS = {
-        "peaceful": "sfx_soft_ambient.mp3",
-        "wonder": "sfx_calm_bubbles.mp3",
-        "musical": "sfx_quirky_orchestra.mp3",
-        "suspense": "sfx_sneaky_caper.mp3",
-        "action": "sfx_upbeat_adventure.mp3",
-        "comedy": "sfx_bouncing_comedy.mp3",
-        "sorrow": "sfx_gentle_melancholy.mp3",
-        "neutral_narration": "sfx_soft_ambient.mp3",
-    }
-
-    SCENE_MOODS = {
-        "peaceful": "calm settings, gentle dialogue, rest, everyday life",
-        "wonder": "discovery, awe, magic, beauty, curiosity",
-        "musical": "music, rehearsal, performance, song, instruments",
-        "suspense": "threat, scheming, secrecy, fear, rising danger",
-        "action": "chases, rescues, fights, urgency, high stakes",
-        "comedy": "jokes, mishaps, slapstick, absurdity, mistaken identity",
-        "sorrow": "loss, grief, loneliness, regret",
-        "neutral_narration": "connective narration or anything that does not clearly fit",
-    }
-
     def create(self, request: AiInput) -> AiCapabilityResponse:
         context = request.resolved_context()
-        mood_lines = [f'"{mood}" ({hint})' for mood, hint in self.SCENE_MOODS.items()]
+        
+        # We import here to avoid circular imports if any, but better at top of file if possible.
+        from backend.app.modules.audio_engine.scene_controller import ALLOWED_AUDIO_TAGS
+        tag_lines = list(ALLOWED_AUDIO_TAGS)
 
         result = _safe_json_completion(
-            _prompts.novel_mode_prompt(context, mood_lines),
+            _prompts.novel_mode_prompt(context, tag_lines),
             _prompts.user_content(context),
         )
 
         if "error" not in result:
-            mood = str(result.get("scene_mood", "")).strip().lower()
-            if mood not in self.AUDIO_TAGS:
-                mood = "neutral_narration"
-            result["scene_mood"] = mood
-            result["audio_tag"] = self.AUDIO_TAGS[mood]
+            audio_tag = str(result.get("audio_tag", "")).strip().lower()
+            if audio_tag not in ALLOWED_AUDIO_TAGS:
+                audio_tag = "neutral_narration"
+            result["audio_tag"] = audio_tag
+            
+            result["scene_mood"] = str(result.get("scene_mood") or "neutral_narration").strip()
             result["emotion"] = str(result.get("emotion") or "neutral").strip().lower()
             result["intensity"] = _clamp_intensity(result.get("intensity"))
             result.setdefault("companion_commentary", "")

@@ -13,6 +13,7 @@ from backend.app.modules.preprocessing.router import router as preprocessing_rou
 from backend.app.modules.reading_engine.router import router as reading_engine_router
 from backend.app.modules.reading_speed.router import router as reading_speed_router
 from backend.app.modules.session.router import router as session_router
+from backend.app.api.device import router as device_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -28,5 +29,6 @@ for module_router in (
     reading_speed_router,
     database_router,
     session_router,
+    device_router,
 ):
     api_router.include_router(module_router)

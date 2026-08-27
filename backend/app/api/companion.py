@@ -58,6 +58,8 @@ from backend.app.modules.database.session import get_db
 from backend.app.modules.reading_speed.calibration import CalibrationError
 from backend.app.modules.reading_speed.models import DifficultyLevel
 from backend.app.modules.reading_speed.service import reading_speed_service
+from backend.app.modules.audio_engine.speech_provider import EdgeSpeechProvider
+from backend.app.modules.audio_engine.models import AudioProfile, SpeechRequest
 
 logger = logging.getLogger(__name__)
 
@@ -677,4 +679,46 @@ def generate_flashcards(
             {"id": card.id, "term": card.term, "definition": card.definition} for card in cards
         ]
     }
+
+
+@router.get("/voices")
+async def get_voices() -> dict[str, Any]:
+    """List available voices for the frontend Settings dropdown.
+    
+    Restricts to English locales to avoid overwhelming the UI.
+    """
+    provider = EdgeSpeechProvider()
+    all_voices = await provider.get_available_voices()
+    
+    # Filter to English voices
+    en_voices = [v for v in all_voices if v.locale and v.locale.startswith("en-")]
+    
+    return {
+        "voices": [
+            {"id": v.id, "name": v.name, "gender": v.gender}
+            for v in en_voices
+        ]
+    }
+
+
+@router.get("/voices/test")
+async def test_voice(voice_id: str) -> Response:
+    """Generate a short audio clip for the given voice."""
+    provider = EdgeSpeechProvider(voice_id=voice_id)
+    profile = AudioProfile(name="test")
+    request = SpeechRequest(
+        text="Hi, I am your new reading voice.",
+        profile=profile,
+        voice_id=voice_id
+    )
+    
+    response = await provider.synthesize(request)
+    
+    if not response.ok or not response.audio:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=response.error or "Failed to synthesize voice test.",
+        )
+        
+    return Response(content=response.audio, media_type=response.content_type)
 

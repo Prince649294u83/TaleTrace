@@ -17,6 +17,8 @@ against captured payloads, which is where the parsing bugs actually lived.
 
 import json
 
+import os
+
 import pytest
 
 from backend.app.modules.merge_memory import MergeMemory, Page
@@ -29,10 +31,10 @@ from backend.app.modules.ocr.pipeline import (
 )
 from backend.app.modules.ocr.providers import (
     GoogleVisionProvider,
-    OcrProviderError,
     coerce_to_jpeg_bytes,
     get_ocr_engine,
 )
+from backend.app.modules.ocr.providers import OcrProviderError, OcrProviderUnavailable
 from backend.app.modules.ocr.replay import ReplayAdapter
 from backend.app.shared.constants import FIRST_PAGE_INDEX
 from backend.app.shared.exceptions import StaleContentError
@@ -193,17 +195,30 @@ class TestReplayAdapter:
         assert [w.text for w in words] == ["inline", "page"]
 
 
-class TestProductionEngineIsVisionOnly:
-    """Production has one OCR engine and no way to pick another."""
+class TestProductionEngineSelection:
+    """Provider selection: OCR.Space (primary) and Google Vision (fallback)."""
 
-    def test_the_production_engine_is_google_vision(self):
+    def test_ocr_space_is_selected_when_its_key_is_set(self, monkeypatch):
+        monkeypatch.setenv("OCR_SPACE_API_KEY", "key")
+        monkeypatch.delenv("GOOGLE_VISION_API_KEY", raising=False)
+        assert get_ocr_engine().provider_name == "ocr_space"
+
+    def test_vision_is_selected_when_only_its_key_is_set(self, monkeypatch):
+        monkeypatch.delenv("OCR_SPACE_API_KEY", raising=False)
+        monkeypatch.setenv("GOOGLE_VISION_API_KEY", "key")
         assert get_ocr_engine().provider_name == "google_vision"
+
+    def test_ocr_space_takes_priority_over_vision(self, monkeypatch):
+        monkeypatch.setenv("OCR_SPACE_API_KEY", "ocr-key")
+        monkeypatch.setenv("GOOGLE_VISION_API_KEY", "vision-key")
+        assert get_ocr_engine().provider_name == "ocr_space"
 
     def test_no_environment_variable_can_change_the_engine(self, monkeypatch):
-        # The whole point of dropping the registry: a stray or misspelt variable
+        # The whole point of dropping the string registry: a stray or misspelt variable
         # must not be able to change which engine reads the page.
         monkeypatch.setenv("OCR_PROVIDER", "paddle")
-        assert get_ocr_engine().provider_name == "google_vision"
+        monkeypatch.setenv("OCR_SPACE_API_KEY", "key")
+        assert get_ocr_engine().provider_name == "ocr_space"
 
     def test_the_replay_adapter_is_not_reachable_from_production(self):
         # Replay must be constructed explicitly by a test or demo. It keeps a
@@ -221,16 +236,23 @@ class TestProductionEngineIsVisionOnly:
         assert list(inspect.signature(get_ocr_engine).parameters) == ["kwargs"]
 
     def test_resolving_the_engine_does_not_check_credentials(self, monkeypatch):
+        monkeypatch.delenv("OCR_SPACE_API_KEY", raising=False)
         monkeypatch.delenv("GOOGLE_VISION_API_KEY", raising=False)
         # Constructing the runtime must not require a network call or a key;
-        # the failure belongs at the first frame, not at startup.
-        assert get_ocr_engine().provider_name == "google_vision"
+        # the failure belongs at the first frame, not at startup.  It defaults
+        # to OCR.Space so the error names the prototype key.
+        assert get_ocr_engine().provider_name == "ocr_space"
 
     def test_both_sources_satisfy_the_port(self):
         # Structural, not inheritance: the pipeline accepts anything with the
         # methods, which is what lets replay stand in for Vision without the
         # pipeline knowing.
-        for source in (GoogleVisionProvider(api_key="x"), ReplayAdapter()):
+        from backend.app.modules.ocr.ocr_space import OcrSpaceProvider
+        for source in (
+            GoogleVisionProvider(api_key="x"), 
+            OcrSpaceProvider(api_key="x"),
+            ReplayAdapter()
+        ):
             assert isinstance(source, OcrProvider)
 
     def test_the_sources_disagree_about_what_they_accept(self):
@@ -238,6 +260,64 @@ class TestProductionEngineIsVisionOnly:
         # JPEG bytes; replay reads recorded responses, not images.
         assert GoogleVisionProvider(api_key="x").accepts(b"jpeg-bytes")
         assert not ReplayAdapter().accepts(b"jpeg-bytes")
+
+class TestOcrSpaceProvider:
+    """Unit tests for the new OCR.Space adapter."""
+
+    def test_missing_key_raises_unavailable(self):
+        # We ensure the env var is gone, and we don't pass it to __init__
+        import os
+        from backend.app.modules.ocr.ocr_space import OcrSpaceProvider
+        
+        provider = OcrSpaceProvider(api_key="")
+        # Force api_key empty in case the env var slipped through
+        provider.api_key = ""
+        
+        with pytest.raises(OcrProviderUnavailable, match="OCR_SPACE_API_KEY is not set"):
+            provider.extract(b"dummy")
+
+    def test_image_larger_than_one_megabyte_is_rejected(self):
+        from backend.app.modules.ocr.ocr_space import OcrSpaceProvider
+        
+        provider = OcrSpaceProvider(api_key="dummy")
+        huge_image = b"0" * 1_048_577  # 1 byte over 1MB
+        
+        with pytest.raises(OcrProviderError, match="exceeds the OCR.Space free-tier limit"):
+            provider.extract(huge_image)
+
+    def test_paragraph_grouping_by_vertical_gap(self):
+        from backend.app.modules.ocr.ocr_space import _assign_paragraphs
+        
+        # Scenario: two lines close together (y=100, 115), one line far away (y=200)
+        # Median height is 10. Threshold is 1.5 * 10 = 15.
+        y_centers = [100.0, 115.0, 200.0]
+        heights = [10.0, 10.0, 10.0]
+        
+        paragraphs = _assign_paragraphs(y_centers, heights)
+        
+        # First two lines are one paragraph (gap 15 <= 15)
+        # Third line is a new paragraph (gap 85 > 15)
+        assert paragraphs == [0, 0, 1]
+
+    @pytest.mark.skipif(
+        not os.environ.get("OCR_SPACE_API_KEY"), 
+        reason="Real OCR.Space smoke test requires OCR_SPACE_API_KEY"
+    )
+    def test_real_ocr_space_smoke_test(self):
+        # An opt-in integration test that actually hits OCR.Space Engine 2
+        # Requires OCR_SPACE_API_KEY. Skips otherwise.
+        from backend.app.modules.ocr.ocr_space import OcrSpaceProvider
+        
+        provider = OcrSpaceProvider()
+        # Create a tiny 50x50 white JPEG to send
+        import cv2
+        import numpy as np
+        img = np.full((50, 50, 3), 255, dtype=np.uint8)
+        
+        # Just getting a result back (even 0 words) proves the API auth and
+        # request format are correct.
+        words = provider.extract(img)
+        assert isinstance(words, list)
 
     def test_replay_uses_the_production_parser(self):
         # Not a second parser: a recorded Vision response replays through

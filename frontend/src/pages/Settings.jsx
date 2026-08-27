@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sun, Moon, Check, Gauge } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -28,6 +28,39 @@ export default function Settings() {
   const [speedModalOpen, setSpeedModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [voices, setVoices] = useState([]);
+  const [loadingVoices, setLoadingVoices] = useState(false);
+  const [playingVoice, setPlayingVoice] = useState(false);
+  const [audioEl, setAudioEl] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchVoices = async () => {
+      setLoadingVoices(true);
+      try {
+        const res = await api.getVoices();
+        if (mounted) setVoices(res.voices || []);
+      } catch (e) {
+        console.error("Failed to fetch voices", e);
+      } finally {
+        if (mounted) setLoadingVoices(false);
+      }
+    };
+    fetchVoices();
+    return () => { mounted = false; };
+  }, []);
+
+  const testVoice = (voiceId) => {
+    if (audioEl) {
+      audioEl.pause();
+    }
+    const audio = new Audio(`/api/voices/test?voice_id=${encodeURIComponent(voiceId)}`);
+    setPlayingVoice(true);
+    audio.onended = () => setPlayingVoice(false);
+    audio.onerror = () => setPlayingVoice(false);
+    setAudioEl(audio);
+    audio.play();
+  };
 
   const save = async () => {
     setSaving(true);
@@ -107,6 +140,41 @@ export default function Settings() {
           <div className="settings-section">
             <div className="section-title">Reader Type</div>
             <ReaderTypeSelector value={readerType} onChange={setReaderType} />
+          </div>
+        </Card>
+
+        <Card>
+          <div className="settings-section">
+            <div className="section-title">Reading Voice</div>
+            <div style={{ marginBottom: '1rem', color: 'var(--text-muted)' }}>
+              Select the voice used for narration and meaning readouts.
+            </div>
+            {loadingVoices ? (
+              <div style={{ color: 'var(--text-muted)' }}>Loading voices...</div>
+            ) : (
+              <div className="row" style={{ gap: 10 }}>
+                <select
+                  className="input"
+                  style={{ flex: 1 }}
+                  value={prefs.ttsVoice || ''}
+                  onChange={(e) => setPrefs({ ...prefs, ttsVoice: e.target.value })}
+                >
+                  <option value="">Default (Auto)</option>
+                  {voices.map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} ({v.gender || 'Unknown'})
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  variant="secondary"
+                  disabled={!prefs.ttsVoice || playingVoice}
+                  onClick={() => testVoice(prefs.ttsVoice)}
+                >
+                  {playingVoice ? "Playing..." : "Test Voice"}
+                </Button>
+              </div>
+            )}
           </div>
         </Card>
 

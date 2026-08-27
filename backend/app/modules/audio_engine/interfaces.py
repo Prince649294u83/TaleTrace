@@ -18,11 +18,46 @@ from backend.app.modules.audio_engine.models import (
     PlaybackStatistics,
     PlaybackStatus,
     ReadingPointer,
+    SceneDecision,
     SentenceChunk,
     SpeechRequest,
     SpeechResponse,
     Voice,
 )
+
+
+class AmbientProviderInterface(Protocol):
+    """Plays ambient audio in parallel with TTS.
+
+    pygame lives behind this interface.  Replacing ``LocalAmbientProvider``
+    changes nothing outside this module.  All blocking calls (play, fadeout,
+    set_volume) must be wrapped in ``asyncio.to_thread``.
+    """
+
+    async def play(self, decision: SceneDecision) -> None:
+        """Start playing ambient audio for the given scene."""
+        ...
+
+    async def crossfade(self, decision: SceneDecision, duration_ms: int = 500) -> None:
+        """Crossfade to a new scene.  Same audio_tag = volume adjust only."""
+        ...
+
+    async def pause(self) -> None:
+        """Pause ambient playback, retaining position and track."""
+        ...
+
+    async def resume(self) -> None:
+        """Resume from the paused position.  Must not restart the track."""
+        ...
+
+    async def stop(self) -> None:
+        """Stop playback and release resources."""
+        ...
+
+    @property
+    def current_tag(self) -> str | None:
+        """The audio_tag of the currently playing track, or None."""
+        ...
 
 
 class SpeechProviderInterface(Protocol):
@@ -335,3 +370,19 @@ class SentenceQueueInterface(Protocol):
     def size(self) -> int:
         """Number of queued sentences."""
         ...
+
+
+class AmbientProviderInterface(Protocol):
+    """Plays ambient audio in parallel with TTS.
+
+    pygame lives behind this interface. Replacing LocalAmbientProvider
+    changes nothing outside this module.
+    """
+
+    async def crossfade(self, decision: "SceneDecision", duration_ms: int = 500) -> None: ...
+    async def pause(self) -> None: ...
+    async def resume(self) -> None: ...
+    async def stop(self) -> None: ...
+
+    @property
+    def current_tag(self) -> str | None: ...

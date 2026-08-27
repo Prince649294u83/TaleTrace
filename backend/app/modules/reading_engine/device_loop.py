@@ -46,7 +46,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from backend.app.modules.image_receiver import Esp32Buttons, Esp32Camera
-from backend.app.modules.image_receiver.protocols import ButtonSource, CameraSource
+from backend.app.modules.image_receiver.protocols import ButtonSource, CameraSource, DisplayTarget
+from backend.app.modules.reading_engine.engine import MeaningLookupResult
 from backend.app.modules.reading_engine.runtime import ReadingRuntime
 from backend.app.shared.clock import Clock, RealClock
 from backend.app.shared.events import SessionEvent
@@ -91,6 +92,7 @@ class DeviceLoop:
     runtime: ReadingRuntime
     camera: CameraSource = field(default_factory=Esp32Camera)
     buttons: ButtonSource = field(default_factory=Esp32Buttons)
+    display: DisplayTarget | None = None
     settle_seconds: float = _GESTURE_SETTLE_SECONDS
     # The only reason a simulated session can cover fifteen minutes in seconds.
     # Real by default so production and `live_session` are unaffected by its
@@ -211,7 +213,13 @@ class DeviceLoop:
         # Both buttons resolve a word by pointing; they differ in what happens
         # next, which is the engine's call and not the loop's.
         if event is SessionEvent.MEANING_MODE_ON:
-            await self._run_gesture(meaning=True)
+            drain_results = await self._run_gesture(meaning=True)
+            # Send any MeaningLookupResult to the OLED.
+            for result in drain_results:
+                if isinstance(result, MeaningLookupResult) and result.success:
+                    await self._show_on_display(
+                        f"{result.target_word.upper()}: {result.oled_text}"
+                    )
             # The gesture publishes MEANING_REQUESTED only when it resolved a word
             # with confidence, so a missed fingertip would leave narration running
             # while the reader holds the switch — the one thing the switch is for.
@@ -220,6 +228,9 @@ class DeviceLoop:
             # what. Done after the gesture, never before: `meaning_mode_on` returns
             # early when already active, so pausing first would swallow the real
             # request and the explanation with it.
+            #
+            # Guard: only call the fallback if _run_gesture did NOT already trigger
+            # meaning_mode_on via MEANING_REQUESTED (which would have set the flag).
             if not self.runtime.engine.state.is_meaning_mode:
                 await self.runtime.engine.meaning_mode_on()
             return
@@ -233,11 +244,14 @@ class DeviceLoop:
             # has no branch for it — this edge comes from a switch, not a gesture.
             await self.runtime.engine.meaning_mode_off()
 
-    async def _run_gesture(self, *, meaning: bool) -> None:
+    async def _run_gesture(self, *, meaning: bool) -> list:
         """Capture a frame and resolve the fingertip to a word.
 
         The settle delay is the reference's, kept because it is about the reader
         and not about the code: a hand is still moving when the button is pressed.
+
+        Returns the drain results list so the caller can extract
+        ``MeaningLookupResult`` for the OLED.
         """
 
         if self.settle_seconds:
@@ -246,15 +260,31 @@ class DeviceLoop:
         raw = self.camera.frame()
         if raw is None:
             logger.warning("gesture requested but the camera did not answer")
-            return
+            return []
 
         image = self.camera.decode(raw)
         if image is None:
             logger.warning("gesture requested but the frame could not be decoded")
-            return
+            return []
 
-        await self.runtime.feed_gesture_frame(image, meaning_gesture=meaning)
+        _selection, drain_results = await self.runtime.feed_gesture_frame(
+            image, meaning_gesture=meaning
+        )
         self.gestures_run += 1
+        return drain_results
+
+    async def _show_on_display(self, text: str) -> None:
+        """Send text to the OLED.  Swallows all errors.
+
+        Display failures are non-fatal: a dead OLED must not stop reading.
+        """
+
+        if self.display is None:
+            return
+        try:
+            await self.display.show(text)
+        except Exception as error:
+            logger.debug("display update failed: %s", error)
 
     async def finish(self) -> Any:
         """End the session: drain what is queued, then close it.

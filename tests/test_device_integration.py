@@ -1040,21 +1040,22 @@ class TestPreflight:
         names = [name for name, _, _ in preflight()]
 
         assert names == [
-            "Google Vision",
+            "OCR",
             "Groq — Merge Engine",
             "Groq — AI Engine",
             "ESP32-CAM",
             "ESP32 buttons",
         ]
 
-    def test_a_missing_vision_key_is_reported_as_unready(self, monkeypatch):
+    def test_a_missing_ocr_key_is_reported_as_unready(self, monkeypatch):
+        monkeypatch.setenv("OCR_SPACE_API_KEY", "")
         monkeypatch.setenv("GOOGLE_VISION_API_KEY", "")
         monkeypatch.delenv("ESP32_CAM_CAPTURE_URL", raising=False)
         monkeypatch.delenv("ESP32_BUTTONS_URL", raising=False)
 
         rows = dict((name, ok) for name, ok, _ in preflight())
 
-        assert rows["Google Vision"] is False
+        assert rows["OCR"] is False
 
     def test_it_names_the_consequence_not_the_variable(self, monkeypatch):
         """An operator reading this needs to know whether to bother starting."""
@@ -1091,7 +1092,8 @@ class TestPreflight:
         """Secrets are reported as present or absent. This is a group project and
         the output goes in a terminal someone screenshots."""
 
-        monkeypatch.setenv("GOOGLE_VISION_API_KEY", "AIzaSy-secret-value")
+        monkeypatch.setenv("OCR_SPACE_API_KEY", "AIzaSy-secret-value-1")
+        monkeypatch.setenv("GOOGLE_VISION_API_KEY", "AIzaSy-secret-value-2")
         monkeypatch.setenv("GROQ_API_KEY_1", "gsk-secret-value")
         monkeypatch.setenv("GROQ_API_KEY_2", "gsk-secret-value")
         monkeypatch.delenv("ESP32_CAM_CAPTURE_URL", raising=False)

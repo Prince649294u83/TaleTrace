@@ -20,7 +20,7 @@ class PromptBuilderInterface(Protocol):
         """Return the system prompt for the image-decision capability."""
         ...
 
-    def novel_mode_prompt(self, context: ReadingContext, scene_moods: list[str]) -> str:
+    def novel_mode_prompt(self, context: ReadingContext, audio_tags: list[str]) -> str:
         """Return the system prompt for Novel Mode scene classification."""
         ...
 

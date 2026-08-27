@@ -1,0 +1,2351 @@
+{
+  "ParsedResults": [
+    {
+      "TextOverlay": {
+        "Lines": [
+          {
+            "LineText": "1 for",
+            "Words": [
+              {
+                "WordText": "1",
+                "Left": 0,
+                "Top": 37,
+                "Height": 40,
+                "Width": 20
+              },
+              {
+                "WordText": "for",
+                "Left": 25,
+                "Top": 37,
+                "Height": 40,
+                "Width": 54
+              }
+            ],
+            "MaxHeight": 40,
+            "MinTop": 37
+          },
+          {
+            "LineText": "nat's",
+            "Words": [
+              {
+                "WordText": "nat's",
+                "Left": 0,
+                "Top": 149,
+                "Height": 37,
+                "Width": 67
+              }
+            ],
+            "MaxHeight": 37,
+            "MinTop": 149
+          },
+          {
+            "LineText": "gap",
+            "Words": [
+              {
+                "WordText": "gap",
+                "Left": 0,
+                "Top": 209,
+                "Height": 37,
+                "Width": 65
+              }
+            ],
+            "MaxHeight": 37,
+            "MinTop": 209
+          },
+          {
+            "LineText": "like",
+            "Words": [
+              {
+                "WordText": "like",
+                "Left": 0,
+                "Top": 309,
+                "Height": 37,
+                "Width": 60
+              }
+            ],
+            "MaxHeight": 37,
+            "MinTop": 309
+          },
+          {
+            "LineText": "hey",
+            "Words": [
+              {
+                "WordText": "hey",
+                "Left": 0,
+                "Top": 412,
+                "Height": 47,
+                "Width": 56
+              }
+            ],
+            "MaxHeight": 47,
+            "MinTop": 412
+          },
+          {
+            "LineText": "ege",
+            "Words": [
+              {
+                "WordText": "ege",
+                "Left": 0,
+                "Top": 526,
+                "Height": 35,
+                "Width": 51
+              }
+            ],
+            "MaxHeight": 35,
+            "MinTop": 526
+          },
+          {
+            "LineText": "ind",
+            "Words": [
+              {
+                "WordText": "ind",
+                "Left": 0,
+                "Top": 572,
+                "Height": 30,
+                "Width": 49
+              }
+            ],
+            "MaxHeight": 30,
+            "MinTop": 572
+          },
+          {
+            "LineText": "est",
+            "Words": [
+              {
+                "WordText": "est",
+                "Left": 0,
+                "Top": 630,
+                "Height": 23,
+                "Width": 47
+              }
+            ],
+            "MaxHeight": 23,
+            "MinTop": 630
+          },
+          {
+            "LineText": "ad",
+            "Words": [
+              {
+                "WordText": "ad",
+                "Left": 0,
+                "Top": 765,
+                "Height": 30,
+                "Width": 42
+              }
+            ],
+            "MaxHeight": 30,
+            "MinTop": 765
+          },
+          {
+            "LineText": "led",
+            "Words": [
+              {
+                "WordText": "led",
+                "Left": 0,
+                "Top": 814,
+                "Height": 26,
+                "Width": 40
+              }
+            ],
+            "MaxHeight": 26,
+            "MinTop": 814
+          },
+          {
+            "LineText": "ed",
+            "Words": [
+              {
+                "WordText": "ed",
+                "Left": 0,
+                "Top": 858,
+                "Height": 26,
+                "Width": 37
+              }
+            ],
+            "MaxHeight": 26,
+            "MinTop": 858
+          },
+          {
+            "LineText": "ng",
+            "Words": [
+              {
+                "WordText": "ng",
+                "Left": 0,
+                "Top": 907,
+                "Height": 28,
+                "Width": 42
+              }
+            ],
+            "MaxHeight": 28,
+            "MinTop": 907
+          },
+          {
+            "LineText": "ne",
+            "Words": [
+              {
+                "WordText": "ne",
+                "Left": 0,
+                "Top": 1037,
+                "Height": 21,
+                "Width": 35
+              }
+            ],
+            "MaxHeight": 21,
+            "MinTop": 1037
+          },
+          {
+            "LineText": "ck,",
+            "Words": [
+              {
+                "WordText": "ck",
+                "Left": 0,
+                "Top": 1072,
+                "Height": 35,
+                "Width": 44
+              },
+              {
+                "WordText": ",",
+                "Left": 0,
+                "Top": 1072,
+                "Height": 35,
+                "Width": 44
+              }
+            ],
+            "MaxHeight": 35,
+            "MinTop": 1072
+          },
+          {
+            "LineText": "nt,",
+            "Words": [
+              {
+                "WordText": "nt",
+                "Left": 0,
+                "Top": 1121,
+                "Height": 30,
+                "Width": 40
+              },
+              {
+                "WordText": ",",
+                "Left": 0,
+                "Top": 1121,
+                "Height": 30,
+                "Width": 40
+              }
+            ],
+            "MaxHeight": 30,
+            "MinTop": 1121
+          },
+          {
+            "LineText": "nk",
+            "Words": [
+              {
+                "WordText": "nk",
+                "Left": 0,
+                "Top": 1156,
+                "Height": 28,
+                "Width": 30
+              }
+            ],
+            "MaxHeight": 28,
+            "MinTop": 1156
+          },
+          {
+            "LineText": "W.",
+            "Words": [
+              {
+                "WordText": "W",
+                "Left": 0,
+                "Top": 1244,
+                "Height": 23,
+                "Width": 35
+              },
+              {
+                "WordText": ".",
+                "Left": 0,
+                "Top": 1244,
+                "Height": 23,
+                "Width": 35
+              }
+            ],
+            "MaxHeight": 23,
+            "MinTop": 1244
+          },
+          {
+            "LineText": "re",
+            "Words": [
+              {
+                "WordText": "re",
+                "Left": 0,
+                "Top": 1321,
+                "Height": 19,
+                "Width": 23
+              }
+            ],
+            "MaxHeight": 19,
+            "MinTop": 1321
+          },
+          {
+            "LineText": "These soft skills are, I've come to realize, greatlyu",
+            "Words": [
+              {
+                "WordText": "These",
+                "Left": 483,
+                "Top": -5,
+                "Height": 52,
+                "Width": 93
+              },
+              {
+                "WordText": "soft",
+                "Left": 578,
+                "Top": 2,
+                "Height": 49,
+                "Width": 60
+              },
+              {
+                "WordText": "skills",
+                "Left": 640,
+                "Top": 7,
+                "Height": 51,
+                "Width": 77
+              },
+              {
+                "WordText": "are",
+                "Left": 718,
+                "Top": 14,
+                "Height": 49,
+                "Width": 60
+              },
+              {
+                "WordText": ",",
+                "Left": 718,
+                "Top": 14,
+                "Height": 49,
+                "Width": 60
+              },
+              {
+                "WordText": "I've",
+                "Left": 780,
+                "Top": 19,
+                "Height": 49,
+                "Width": 54
+              },
+              {
+                "WordText": "come",
+                "Left": 836,
+                "Top": 24,
+                "Height": 51,
+                "Width": 82
+              },
+              {
+                "WordText": "to",
+                "Left": 920,
+                "Top": 31,
+                "Height": 47,
+                "Width": 32
+              },
+              {
+                "WordText": "realize",
+                "Left": 954,
+                "Top": 33,
+                "Height": 54,
+                "Width": 116
+              },
+              {
+                "WordText": ",",
+                "Left": 954,
+                "Top": 33,
+                "Height": 54,
+                "Width": 116
+              },
+              {
+                "WordText": "greatlyu",
+                "Left": 1071,
+                "Top": 43,
+                "Height": 55,
+                "Width": 129
+              }
+            ],
+            "MaxHeight": 104,
+            "MinTop": -5
+          },
+          {
+            "LineText": "Finance is overwhelmingly taught as a math-b",
+            "Words": [
+              {
+                "WordText": "Finance",
+                "Left": 488,
+                "Top": 52,
+                "Height": 53,
+                "Width": 119
+              },
+              {
+                "WordText": "is",
+                "Left": 608,
+                "Top": 61,
+                "Height": 46,
+                "Width": 36
+              },
+              {
+                "WordText": "overwhelmingly",
+                "Left": 647,
+                "Top": 64,
+                "Height": 62,
+                "Width": 245
+              },
+              {
+                "WordText": "taught",
+                "Left": 894,
+                "Top": 83,
+                "Height": 52,
+                "Width": 108
+              },
+              {
+                "WordText": "as",
+                "Left": 1003,
+                "Top": 91,
+                "Height": 46,
+                "Width": 36
+              },
+              {
+                "WordText": "a",
+                "Left": 1042,
+                "Top": 94,
+                "Height": 46,
+                "Width": 25
+              },
+              {
+                "WordText": "math",
+                "Left": 1069,
+                "Top": 96,
+                "Height": 54,
+                "Width": 132
+              },
+              {
+                "WordText": "-",
+                "Left": 1069,
+                "Top": 96,
+                "Height": 54,
+                "Width": 131
+              },
+              {
+                "WordText": "b",
+                "Left": 1069,
+                "Top": 96,
+                "Height": 54,
+                "Width": 131
+              }
+            ],
+            "MaxHeight": 99,
+            "MinTop": 52
+          },
+          {
+            "LineText": "you put data into a formula and the formula tells",
+            "Words": [
+              {
+                "WordText": "you",
+                "Left": 442,
+                "Top": 103,
+                "Height": 45,
+                "Width": 58
+              },
+              {
+                "WordText": "put",
+                "Left": 502,
+                "Top": 108,
+                "Height": 44,
+                "Width": 58
+              },
+              {
+                "WordText": "data",
+                "Left": 562,
+                "Top": 112,
+                "Height": 45,
+                "Width": 68
+              },
+              {
+                "WordText": "into",
+                "Left": 632,
+                "Top": 117,
+                "Height": 45,
+                "Width": 73
+              },
+              {
+                "WordText": "a",
+                "Left": 707,
+                "Top": 122,
+                "Height": 41,
+                "Width": 23
+              },
+              {
+                "WordText": "formula",
+                "Left": 732,
+                "Top": 124,
+                "Height": 49,
+                "Width": 128
+              },
+              {
+                "WordText": "and",
+                "Left": 861,
+                "Top": 134,
+                "Height": 45,
+                "Width": 68
+              },
+              {
+                "WordText": "the",
+                "Left": 931,
+                "Top": 139,
+                "Height": 44,
+                "Width": 53
+              },
+              {
+                "WordText": "formula",
+                "Left": 986,
+                "Top": 143,
+                "Height": 50,
+                "Width": 138
+              },
+              {
+                "WordText": "tells",
+                "Left": 1126,
+                "Top": 153,
+                "Height": 46,
+                "Width": 75
+              }
+            ],
+            "MaxHeight": 96,
+            "MinTop": 103
+          },
+          {
+            "LineText": "and it's assumed that you'll just go do it.",
+            "Words": [
+              {
+                "WordText": "and",
+                "Left": 439,
+                "Top": 148,
+                "Height": 54,
+                "Width": 53
+              },
+              {
+                "WordText": "it's",
+                "Left": 494,
+                "Top": 153,
+                "Height": 53,
+                "Width": 53
+              },
+              {
+                "WordText": "assumed",
+                "Left": 549,
+                "Top": 158,
+                "Height": 60,
+                "Width": 132
+              },
+              {
+                "WordText": "that",
+                "Left": 683,
+                "Top": 169,
+                "Height": 54,
+                "Width": 65
+              },
+              {
+                "WordText": "you'll",
+                "Left": 751,
+                "Top": 175,
+                "Height": 57,
+                "Width": 96
+              },
+              {
+                "WordText": "just",
+                "Left": 848,
+                "Top": 183,
+                "Height": 54,
+                "Width": 59
+              },
+              {
+                "WordText": "go",
+                "Left": 909,
+                "Top": 189,
+                "Height": 52,
+                "Width": 47
+              },
+              {
+                "WordText": "do",
+                "Left": 958,
+                "Top": 193,
+                "Height": 52,
+                "Width": 47
+              },
+              {
+                "WordText": "it",
+                "Left": 1007,
+                "Top": 197,
+                "Height": 54,
+                "Width": 50
+              },
+              {
+                "WordText": ".",
+                "Left": 1007,
+                "Top": 197,
+                "Height": 54,
+                "Width": 50
+              }
+            ],
+            "MaxHeight": 102,
+            "MinTop": 148
+          },
+          {
+            "LineText": "This is true in personal finance, where you're tol",
+            "Words": [
+              {
+                "WordText": "This",
+                "Left": 466,
+                "Top": 206,
+                "Height": 55,
+                "Width": 71
+              },
+              {
+                "WordText": "is",
+                "Left": 539,
+                "Top": 212,
+                "Height": 51,
+                "Width": 29
+              },
+              {
+                "WordText": "true",
+                "Left": 570,
+                "Top": 215,
+                "Height": 54,
+                "Width": 65
+              },
+              {
+                "WordText": "in",
+                "Left": 637,
+                "Top": 221,
+                "Height": 52,
+                "Width": 41
+              },
+              {
+                "WordText": "personal",
+                "Left": 679,
+                "Top": 224,
+                "Height": 60,
+                "Width": 132
+              },
+              {
+                "WordText": "finance",
+                "Left": 814,
+                "Top": 236,
+                "Height": 60,
+                "Width": 126
+              },
+              {
+                "WordText": ",",
+                "Left": 814,
+                "Top": 236,
+                "Height": 60,
+                "Width": 126
+              },
+              {
+                "WordText": "where",
+                "Left": 942,
+                "Top": 247,
+                "Height": 57,
+                "Width": 102
+              },
+              {
+                "WordText": "you're",
+                "Left": 1045,
+                "Top": 257,
+                "Height": 57,
+                "Width": 102
+              },
+              {
+                "WordText": "tol",
+                "Left": 1149,
+                "Top": 266,
+                "Height": 53,
+                "Width": 51
+              }
+            ],
+            "MaxHeight": 113,
+            "MinTop": 206
+          },
+          {
+            "LineText": "month emergency fund and save 10% of your salary",
+            "Words": [
+              {
+                "WordText": "month",
+                "Left": 430,
+                "Top": 259,
+                "Height": 53,
+                "Width": 103
+              },
+              {
+                "WordText": "emergency",
+                "Left": 534,
+                "Top": 268,
+                "Height": 58,
+                "Width": 163
+              },
+              {
+                "WordText": "fund",
+                "Left": 698,
+                "Top": 283,
+                "Height": 51,
+                "Width": 81
+              },
+              {
+                "WordText": "and",
+                "Left": 781,
+                "Top": 290,
+                "Height": 49,
+                "Width": 59
+              },
+              {
+                "WordText": "save",
+                "Left": 841,
+                "Top": 295,
+                "Height": 50,
+                "Width": 70
+              },
+              {
+                "WordText": "10",
+                "Left": 912,
+                "Top": 301,
+                "Height": 50,
+                "Width": 75
+              },
+              {
+                "WordText": "%",
+                "Left": 912,
+                "Top": 301,
+                "Height": 50,
+                "Width": 75
+              },
+              {
+                "WordText": "of",
+                "Left": 989,
+                "Top": 308,
+                "Height": 47,
+                "Width": 37
+              },
+              {
+                "WordText": "your",
+                "Left": 1027,
+                "Top": 311,
+                "Height": 51,
+                "Width": 81
+              },
+              {
+                "WordText": "salary",
+                "Left": 1109,
+                "Top": 319,
+                "Height": 52,
+                "Width": 92
+              }
+            ],
+            "MaxHeight": 112,
+            "MinTop": 259
+          },
+          {
+            "LineText": "It's true in investing, where we know the ex",
+            "Words": [
+              {
+                "WordText": "It's",
+                "Left": 462,
+                "Top": 317,
+                "Height": 47,
+                "Width": 56
+              },
+              {
+                "WordText": "true",
+                "Left": 519,
+                "Top": 323,
+                "Height": 48,
+                "Width": 72
+              },
+              {
+                "WordText": "in",
+                "Left": 592,
+                "Top": 329,
+                "Height": 46,
+                "Width": 46
+              },
+              {
+                "WordText": "investing",
+                "Left": 639,
+                "Top": 333,
+                "Height": 56,
+                "Width": 161
+              },
+              {
+                "WordText": ",",
+                "Left": 639,
+                "Top": 333,
+                "Height": 56,
+                "Width": 161
+              },
+              {
+                "WordText": "where",
+                "Left": 802,
+                "Top": 348,
+                "Height": 51,
+                "Width": 108
+              },
+              {
+                "WordText": "we",
+                "Left": 911,
+                "Top": 358,
+                "Height": 47,
+                "Width": 61
+              },
+              {
+                "WordText": "know",
+                "Left": 974,
+                "Top": 363,
+                "Height": 51,
+                "Width": 103
+              },
+              {
+                "WordText": "the",
+                "Left": 1079,
+                "Top": 372,
+                "Height": 48,
+                "Width": 72
+              },
+              {
+                "WordText": "ex",
+                "Left": 1152,
+                "Top": 379,
+                "Height": 47,
+                "Width": 49
+              }
+            ],
+            "MaxHeight": 108,
+            "MinTop": 317
+          },
+          {
+            "LineText": "correlations between interest rates and valuations.",
+            "Words": [
+              {
+                "WordText": "correlations",
+                "Left": 419,
+                "Top": 360,
+                "Height": 54,
+                "Width": 174
+              },
+              {
+                "WordText": "between",
+                "Left": 594,
+                "Top": 378,
+                "Height": 48,
+                "Width": 125
+              },
+              {
+                "WordText": "interest",
+                "Left": 719,
+                "Top": 391,
+                "Height": 48,
+                "Width": 125
+              },
+              {
+                "WordText": "rates",
+                "Left": 844,
+                "Top": 404,
+                "Height": 44,
+                "Width": 80
+              },
+              {
+                "WordText": "and",
+                "Left": 925,
+                "Top": 413,
+                "Height": 42,
+                "Width": 62
+              },
+              {
+                "WordText": "valuations",
+                "Left": 988,
+                "Top": 419,
+                "Height": 54,
+                "Width": 181
+              },
+              {
+                "WordText": ".",
+                "Left": 988,
+                "Top": 419,
+                "Height": 54,
+                "Width": 181
+              }
+            ],
+            "MaxHeight": 113,
+            "MinTop": 360
+          },
+          {
+            "LineText": "And it's true in corporate finance, where CFOs",
+            "Words": [
+              {
+                "WordText": "And",
+                "Left": 450,
+                "Top": 415,
+                "Height": 54,
+                "Width": 64
+              },
+              {
+                "WordText": "it's",
+                "Left": 516,
+                "Top": 421,
+                "Height": 52,
+                "Width": 52
+              },
+              {
+                "WordText": "true",
+                "Left": 570,
+                "Top": 427,
+                "Height": 54,
+                "Width": 70
+              },
+              {
+                "WordText": "in",
+                "Left": 641,
+                "Top": 434,
+                "Height": 51,
+                "Width": 40
+              },
+              {
+                "WordText": "corporate",
+                "Left": 683,
+                "Top": 438,
+                "Height": 62,
+                "Width": 148
+              },
+              {
+                "WordText": "finance",
+                "Left": 832,
+                "Top": 452,
+                "Height": 60,
+                "Width": 130
+              },
+              {
+                "WordText": ",",
+                "Left": 832,
+                "Top": 452,
+                "Height": 60,
+                "Width": 130
+              },
+              {
+                "WordText": "where",
+                "Left": 964,
+                "Top": 465,
+                "Height": 58,
+                "Width": 106
+              },
+              {
+                "WordText": "CFOs",
+                "Left": 1071,
+                "Top": 476,
+                "Height": 59,
+                "Width": 120
+              }
+            ],
+            "MaxHeight": 120,
+            "MinTop": 415
+          },
+          {
+            "LineText": "the precise cost of capital.",
+            "Words": [
+              {
+                "WordText": "the",
+                "Left": 410,
+                "Top": 464,
+                "Height": 47,
+                "Width": 46
+              },
+              {
+                "WordText": "precise",
+                "Left": 458,
+                "Top": 469,
+                "Height": 52,
+                "Width": 109
+              },
+              {
+                "WordText": "cost",
+                "Left": 567,
+                "Top": 480,
+                "Height": 48,
+                "Width": 62
+              },
+              {
+                "WordText": "of",
+                "Left": 630,
+                "Top": 487,
+                "Height": 45,
+                "Width": 41
+              },
+              {
+                "WordText": "capital",
+                "Left": 672,
+                "Top": 491,
+                "Height": 54,
+                "Width": 115
+              },
+              {
+                "WordText": ".",
+                "Left": 672,
+                "Top": 491,
+                "Height": 54,
+                "Width": 115
+              }
+            ],
+            "MaxHeight": 80,
+            "MinTop": 464
+          },
+          {
+            "LineText": "It's not that any of these things are bad or wror",
+            "Words": [
+              {
+                "WordText": "It's",
+                "Left": 440,
+                "Top": 512,
+                "Height": 52,
+                "Width": 57
+              },
+              {
+                "WordText": "not",
+                "Left": 497,
+                "Top": 518,
+                "Height": 52,
+                "Width": 57
+              },
+              {
+                "WordText": "that",
+                "Left": 554,
+                "Top": 525,
+                "Height": 53,
+                "Width": 74
+              },
+              {
+                "WordText": "any",
+                "Left": 628,
+                "Top": 533,
+                "Height": 52,
+                "Width": 62
+              },
+              {
+                "WordText": "of",
+                "Left": 691,
+                "Top": 540,
+                "Height": 50,
+                "Width": 39
+              },
+              {
+                "WordText": "these",
+                "Left": 731,
+                "Top": 545,
+                "Height": 55,
+                "Width": 91
+              },
+              {
+                "WordText": "things",
+                "Left": 823,
+                "Top": 555,
+                "Height": 57,
+                "Width": 108
+              },
+              {
+                "WordText": "are",
+                "Left": 931,
+                "Top": 568,
+                "Height": 52,
+                "Width": 62
+              },
+              {
+                "WordText": "bad",
+                "Left": 994,
+                "Top": 575,
+                "Height": 53,
+                "Width": 68
+              },
+              {
+                "WordText": "or",
+                "Left": 1063,
+                "Top": 583,
+                "Height": 51,
+                "Width": 51
+              },
+              {
+                "WordText": "wror",
+                "Left": 1114,
+                "Top": 588,
+                "Height": 55,
+                "Width": 87
+              }
+            ],
+            "MaxHeight": 132,
+            "MinTop": 512
+          },
+          {
+            "LineText": "knowing what to do tells you nothing about what l",
+            "Words": [
+              {
+                "WordText": "knowing",
+                "Left": 401,
+                "Top": 561,
+                "Height": 58,
+                "Width": 131
+              },
+              {
+                "WordText": "what",
+                "Left": 532,
+                "Top": 575,
+                "Height": 52,
+                "Width": 81
+              },
+              {
+                "WordText": "to",
+                "Left": 614,
+                "Top": 584,
+                "Height": 48,
+                "Width": 43
+              },
+              {
+                "WordText": "do",
+                "Left": 658,
+                "Top": 589,
+                "Height": 49,
+                "Width": 49
+              },
+              {
+                "WordText": "tells",
+                "Left": 707,
+                "Top": 594,
+                "Height": 51,
+                "Width": 70
+              },
+              {
+                "WordText": "you",
+                "Left": 778,
+                "Top": 602,
+                "Height": 50,
+                "Width": 65
+              },
+              {
+                "WordText": "nothing",
+                "Left": 844,
+                "Top": 609,
+                "Height": 58,
+                "Width": 136
+              },
+              {
+                "WordText": "about",
+                "Left": 981,
+                "Top": 624,
+                "Height": 54,
+                "Width": 103
+              },
+              {
+                "WordText": "what",
+                "Left": 1085,
+                "Top": 635,
+                "Height": 53,
+                "Width": 92
+              },
+              {
+                "WordText": "l",
+                "Left": 1178,
+                "Top": 645,
+                "Height": 46,
+                "Width": 24
+              }
+            ],
+            "MaxHeight": 131,
+            "MinTop": 561
+          },
+          {
+            "LineText": "your head when you try to do it.",
+            "Words": [
+              {
+                "WordText": "your",
+                "Left": 395,
+                "Top": 610,
+                "Height": 46,
+                "Width": 67
+              },
+              {
+                "WordText": "head",
+                "Left": 463,
+                "Top": 618,
+                "Height": 47,
+                "Width": 77
+              },
+              {
+                "WordText": "when",
+                "Left": 540,
+                "Top": 627,
+                "Height": 48,
+                "Width": 82
+              },
+              {
+                "WordText": "you",
+                "Left": 623,
+                "Top": 637,
+                "Height": 45,
+                "Width": 58
+              },
+              {
+                "WordText": "try",
+                "Left": 681,
+                "Top": 643,
+                "Height": 44,
+                "Width": 48
+              },
+              {
+                "WordText": "to",
+                "Left": 729,
+                "Top": 649,
+                "Height": 43,
+                "Width": 38
+              },
+              {
+                "WordText": "do",
+                "Left": 768,
+                "Top": 653,
+                "Height": 43,
+                "Width": 43
+              },
+              {
+                "WordText": "it",
+                "Left": 811,
+                "Top": 658,
+                "Height": 44,
+                "Width": 46
+              },
+              {
+                "WordText": ".",
+                "Left": 811,
+                "Top": 658,
+                "Height": 44,
+                "Width": 46
+              }
+            ],
+            "MaxHeight": 92,
+            "MinTop": 610
+          },
+          {
+            "LineText": "Two topics impact everyone, whether you are interested",
+            "Words": [
+              {
+                "WordText": "Two",
+                "Left": 380,
+                "Top": 743,
+                "Height": 48,
+                "Width": 68
+              },
+              {
+                "WordText": "topics",
+                "Left": 448,
+                "Top": 753,
+                "Height": 51,
+                "Width": 92
+              },
+              {
+                "WordText": "impact",
+                "Left": 539,
+                "Top": 766,
+                "Height": 53,
+                "Width": 102
+              },
+              {
+                "WordText": "everyone",
+                "Left": 641,
+                "Top": 781,
+                "Height": 58,
+                "Width": 141
+              },
+              {
+                "WordText": ",",
+                "Left": 641,
+                "Top": 781,
+                "Height": 58,
+                "Width": 141
+              },
+              {
+                "WordText": "whether",
+                "Left": 781,
+                "Top": 801,
+                "Height": 57,
+                "Width": 131
+              },
+              {
+                "WordText": "you",
+                "Left": 911,
+                "Top": 820,
+                "Height": 47,
+                "Width": 63
+              },
+              {
+                "WordText": "are",
+                "Left": 974,
+                "Top": 829,
+                "Height": 46,
+                "Width": 59
+              },
+              {
+                "WordText": "interested",
+                "Left": 1032,
+                "Top": 837,
+                "Height": 63,
+                "Width": 167
+              }
+            ],
+            "MaxHeight": 157,
+            "MinTop": 743
+          },
+          {
+            "LineText": "or not: heal",
+            "Words": [
+              {
+                "WordText": "or",
+                "Left": 381,
+                "Top": 790,
+                "Height": 38,
+                "Width": 37
+              },
+              {
+                "WordText": "not",
+                "Left": 418,
+                "Top": 795,
+                "Height": 41,
+                "Width": 62
+              },
+              {
+                "WordText": ":",
+                "Left": 418,
+                "Top": 795,
+                "Height": 41,
+                "Width": 62
+              },
+              {
+                "WordText": "heal",
+                "Left": 479,
+                "Top": 804,
+                "Height": 42,
+                "Width": 65
+              }
+            ],
+            "MaxHeight": 56,
+            "MinTop": 790
+          },
+          {
+            "LineText": "money,",
+            "Words": [
+              {
+                "WordText": "money",
+                "Left": 630,
+                "Top": 837,
+                "Height": 40,
+                "Width": 105
+              },
+              {
+                "WordText": ",",
+                "Left": 630,
+                "Top": 837,
+                "Height": 40,
+                "Width": 105
+              }
+            ],
+            "MaxHeight": 40,
+            "MinTop": 837
+          },
+          {
+            "LineText": "The he:",
+            "Words": [
+              {
+                "WordText": "The",
+                "Left": 408,
+                "Top": 840,
+                "Height": 40,
+                "Width": 62
+              },
+              {
+                "WordText": "he",
+                "Left": 469,
+                "Top": 849,
+                "Height": 38,
+                "Width": 51
+              },
+              {
+                "WordText": ":",
+                "Left": 469,
+                "Top": 849,
+                "Height": 38,
+                "Width": 51
+              }
+            ],
+            "MaxHeight": 47,
+            "MinTop": 840
+          },
+          {
+            "LineText": "ndustry is a triumph of modern scien",
+            "Words": [
+              {
+                "WordText": "ndustry",
+                "Left": 633,
+                "Top": 873,
+                "Height": 57,
+                "Width": 112
+              },
+              {
+                "WordText": "is",
+                "Left": 744,
+                "Top": 892,
+                "Height": 43,
+                "Width": 35
+              },
+              {
+                "WordText": "a",
+                "Left": 777,
+                "Top": 897,
+                "Height": 42,
+                "Width": 26
+              },
+              {
+                "WordText": "triumph",
+                "Left": 801,
+                "Top": 901,
+                "Height": 59,
+                "Width": 131
+              },
+              {
+                "WordText": "of",
+                "Left": 931,
+                "Top": 923,
+                "Height": 45,
+                "Width": 45
+              },
+              {
+                "WordText": "modern",
+                "Left": 974,
+                "Top": 930,
+                "Height": 60,
+                "Width": 136
+              },
+              {
+                "WordText": "scien",
+                "Left": 1109,
+                "Top": 953,
+                "Height": 54,
+                "Width": 94
+              }
+            ],
+            "MaxHeight": 133,
+            "MinTop": 873
+          },
+          {
+            "LineText": "rising life",
+            "Words": [
+              {
+                "WordText": "rising",
+                "Left": 374,
+                "Top": 886,
+                "Height": 42,
+                "Width": 73
+              },
+              {
+                "WordText": "life",
+                "Left": 453,
+                "Top": 886,
+                "Height": 42,
+                "Width": 52
+              }
+            ],
+            "MaxHeight": 42,
+            "MinTop": 886
+          },
+          {
+            "LineText": "y across the world. Scientific discoveri",
+            "Words": [
+              {
+                "WordText": "y",
+                "Left": 629,
+                "Top": 920,
+                "Height": 41,
+                "Width": 25
+              },
+              {
+                "WordText": "across",
+                "Left": 652,
+                "Top": 924,
+                "Height": 52,
+                "Width": 95
+              },
+              {
+                "WordText": "the",
+                "Left": 746,
+                "Top": 939,
+                "Height": 45,
+                "Width": 53
+              },
+              {
+                "WordText": "world",
+                "Left": 798,
+                "Top": 948,
+                "Height": 54,
+                "Width": 105
+              },
+              {
+                "WordText": ".",
+                "Left": 798,
+                "Top": 948,
+                "Height": 54,
+                "Width": 105
+              },
+              {
+                "WordText": "Scientific",
+                "Left": 901,
+                "Top": 965,
+                "Height": 61,
+                "Width": 151
+              },
+              {
+                "WordText": "discoveri",
+                "Left": 1051,
+                "Top": 989,
+                "Height": 62,
+                "Width": 152
+              }
+            ],
+            "MaxHeight": 131,
+            "MinTop": 920
+          },
+          {
+            "LineText": "replaced",
+            "Words": [
+              {
+                "WordText": "replaced",
+                "Left": 370,
+                "Top": 933,
+                "Height": 37,
+                "Width": 116
+              }
+            ],
+            "MaxHeight": 37,
+            "MinTop": 933
+          },
+          {
+            "LineText": "virtually",
+            "Words": [
+              {
+                "WordText": "virtually",
+                "Left": 362,
+                "Top": 971,
+                "Height": 52,
+                "Width": 118
+              }
+            ],
+            "MaxHeight": 52,
+            "MinTop": 971
+          },
+          {
+            "LineText": "lideas about how the human body wor",
+            "Words": [
+              {
+                "WordText": "lideas",
+                "Left": 621,
+                "Top": 956,
+                "Height": 59,
+                "Width": 99
+              },
+              {
+                "WordText": "about",
+                "Left": 716,
+                "Top": 975,
+                "Height": 56,
+                "Width": 88
+              },
+              {
+                "WordText": "how",
+                "Left": 802,
+                "Top": 993,
+                "Height": 53,
+                "Width": 73
+              },
+              {
+                "WordText": "the",
+                "Left": 872,
+                "Top": 1007,
+                "Height": 50,
+                "Width": 58
+              },
+              {
+                "WordText": "human",
+                "Left": 927,
+                "Top": 1018,
+                "Height": 63,
+                "Width": 119
+              },
+              {
+                "WordText": "body",
+                "Left": 1043,
+                "Top": 1041,
+                "Height": 56,
+                "Width": 88
+              },
+              {
+                "WordText": "wor",
+                "Left": 1128,
+                "Top": 1059,
+                "Height": 55,
+                "Width": 76
+              }
+            ],
+            "MaxHeight": 157,
+            "MinTop": 956
+          },
+          {
+            "LineText": "The",
+            "Words": [
+              {
+                "WordText": "The",
+                "Left": 393,
+                "Top": 1019,
+                "Height": 37,
+                "Width": 53
+              }
+            ],
+            "MaxHeight": 37,
+            "MinTop": 1019
+          },
+          {
+            "LineText": "* healthier because of it.",
+            "Words": [
+              {
+                "WordText": "*",
+                "Left": 610,
+                "Top": 1007,
+                "Height": 38,
+                "Width": 21
+              },
+              {
+                "WordText": "healthier",
+                "Left": 628,
+                "Top": 1011,
+                "Height": 60,
+                "Width": 131
+              },
+              {
+                "WordText": "because",
+                "Left": 756,
+                "Top": 1037,
+                "Height": 60,
+                "Width": 126
+              },
+              {
+                "WordText": "of",
+                "Left": 879,
+                "Top": 1062,
+                "Height": 42,
+                "Width": 42
+              },
+              {
+                "WordText": "it",
+                "Left": 918,
+                "Top": 1070,
+                "Height": 44,
+                "Width": 46
+              },
+              {
+                "WordText": ".",
+                "Left": 919,
+                "Top": 1070,
+                "Height": 44,
+                "Width": 46
+              }
+            ],
+            "MaxHeight": 107,
+            "MinTop": 1007
+          },
+          {
+            "LineText": "plannin",
+            "Words": [
+              {
+                "WordText": "plannin",
+                "Left": 353,
+                "Top": 1057,
+                "Height": 47,
+                "Width": 104
+              }
+            ],
+            "MaxHeight": 47,
+            "MinTop": 1057
+          },
+          {
+            "LineText": "ustry investing, personal finance, bu",
+            "Words": [
+              {
+                "WordText": "ustry",
+                "Left": 599,
+                "Top": 1060,
+                "Height": 58,
+                "Width": 87
+              },
+              {
+                "WordText": "investing",
+                "Left": 684,
+                "Top": 1077,
+                "Height": 75,
+                "Width": 177
+              },
+              {
+                "WordText": ",",
+                "Left": 684,
+                "Top": 1077,
+                "Height": 75,
+                "Width": 177
+              },
+              {
+                "WordText": "personal",
+                "Left": 858,
+                "Top": 1111,
+                "Height": 70,
+                "Width": 151
+              },
+              {
+                "WordText": "finance",
+                "Left": 1005,
+                "Top": 1139,
+                "Height": 68,
+                "Width": 140
+              },
+              {
+                "WordText": ",",
+                "Left": 1005,
+                "Top": 1139,
+                "Height": 68,
+                "Width": 140
+              },
+              {
+                "WordText": "bu",
+                "Left": 1142,
+                "Top": 1166,
+                "Height": 53,
+                "Width": 62
+              }
+            ],
+            "MaxHeight": 159,
+            "MinTop": 1060
+          },
+          {
+            "LineText": "ler story.",
+            "Words": [
+              {
+                "WordText": "ler",
+                "Left": 588,
+                "Top": 1106,
+                "Height": 41,
+                "Width": 50
+              },
+              {
+                "WordText": "story",
+                "Left": 633,
+                "Top": 1118,
+                "Height": 51,
+                "Width": 88
+              },
+              {
+                "WordText": ".",
+                "Left": 633,
+                "Top": 1118,
+                "Height": 51,
+                "Width": 88
+              }
+            ],
+            "MaxHeight": 64,
+            "MinTop": 1106
+          },
+          {
+            "LineText": "Fin",
+            "Words": [
+              {
+                "WordText": "Fin",
+                "Left": 384,
+                "Top": 1109,
+                "Height": 37,
+                "Width": 47
+              }
+            ],
+            "MaxHeight": 37,
+            "MinTop": 1109
+          },
+          {
+            "LineText": "univ",
+            "Words": [
+              {
+                "WordText": "univ",
+                "Left": 347,
+                "Top": 1156,
+                "Height": 30,
+                "Width": 60
+              }
+            ],
+            "MaxHeight": 30,
+            "MinTop": 1156
+          },
+          {
+            "LineText": "oped up the smartest minds coming from",
+            "Words": [
+              {
+                "WordText": "oped",
+                "Left": 581,
+                "Top": 1151,
+                "Height": 54,
+                "Width": 80
+              },
+              {
+                "WordText": "up",
+                "Left": 657,
+                "Top": 1168,
+                "Height": 46,
+                "Width": 46
+              },
+              {
+                "WordText": "the",
+                "Left": 700,
+                "Top": 1177,
+                "Height": 49,
+                "Width": 61
+              },
+              {
+                "WordText": "smartest",
+                "Left": 757,
+                "Top": 1189,
+                "Height": 65,
+                "Width": 137
+              },
+              {
+                "WordText": "minds",
+                "Left": 891,
+                "Top": 1217,
+                "Height": 59,
+                "Width": 108
+              },
+              {
+                "WordText": "coming",
+                "Left": 996,
+                "Top": 1239,
+                "Height": 63,
+                "Width": 127
+              },
+              {
+                "WordText": "from",
+                "Left": 1120,
+                "Top": 1266,
+                "Height": 55,
+                "Width": 84
+              }
+            ],
+            "MaxHeight": 169,
+            "MinTop": 1151
+          },
+          {
+            "LineText": "the",
+            "Words": [
+              {
+                "WordText": "the",
+                "Left": 340,
+                "Top": 1193,
+                "Height": 33,
+                "Width": 44
+              }
+            ],
+            "MaxHeight": 33,
+            "MinTop": 1193
+          },
+          {
+            "LineText": "deca",
+            "Words": [
+              {
+                "WordText": "deca",
+                "Left": 335,
+                "Top": 1237,
+                "Height": 35,
+                "Width": 53
+              }
+            ],
+            "MaxHeight": 35,
+            "MinTop": 1237
+          },
+          {
+            "LineText": "e last two decades. Financial Engineering",
+            "Words": [
+              {
+                "WordText": "e",
+                "Left": 577,
+                "Top": 1195,
+                "Height": 47,
+                "Width": 26
+              },
+              {
+                "WordText": "last",
+                "Left": 599,
+                "Top": 1200,
+                "Height": 54,
+                "Width": 58
+              },
+              {
+                "WordText": "two",
+                "Left": 653,
+                "Top": 1211,
+                "Height": 56,
+                "Width": 69
+              },
+              {
+                "WordText": "decades",
+                "Left": 717,
+                "Top": 1226,
+                "Height": 69,
+                "Width": 128
+              },
+              {
+                "WordText": ".",
+                "Left": 717,
+                "Top": 1226,
+                "Height": 69,
+                "Width": 128
+              },
+              {
+                "WordText": "Financial",
+                "Left": 841,
+                "Top": 1253,
+                "Height": 75,
+                "Width": 154
+              },
+              {
+                "WordText": "Engineering",
+                "Left": 991,
+                "Top": 1286,
+                "Height": 88,
+                "Width": 211
+              }
+            ],
+            "MaxHeight": 179,
+            "MinTop": 1195
+          },
+          {
+            "LineText": "major in Princeton's School of Engineerin",
+            "Words": [
+              {
+                "WordText": "major",
+                "Left": 566,
+                "Top": 1241,
+                "Height": 60,
+                "Width": 88
+              },
+              {
+                "WordText": "in",
+                "Left": 650,
+                "Top": 1259,
+                "Height": 50,
+                "Width": 46
+              },
+              {
+                "WordText": "Princeton's",
+                "Left": 692,
+                "Top": 1269,
+                "Height": 78,
+                "Width": 172
+              },
+              {
+                "WordText": "School",
+                "Left": 860,
+                "Top": 1306,
+                "Height": 67,
+                "Width": 120
+              },
+              {
+                "WordText": "of",
+                "Left": 975,
+                "Top": 1332,
+                "Height": 51,
+                "Width": 51
+              },
+              {
+                "WordText": "Engineerin",
+                "Left": 1022,
+                "Top": 1343,
+                "Height": 81,
+                "Width": 182
+              }
+            ],
+            "MaxHeight": 183,
+            "MinTop": 1241
+          },
+          {
+            "LineText": "re any evidence it has made us better investo",
+            "Words": [
+              {
+                "WordText": "re",
+                "Left": 552,
+                "Top": 1290,
+                "Height": 41,
+                "Width": 37
+              },
+              {
+                "WordText": "any",
+                "Left": 586,
+                "Top": 1297,
+                "Height": 45,
+                "Width": 59
+              },
+              {
+                "WordText": "evidence",
+                "Left": 642,
+                "Top": 1310,
+                "Height": 61,
+                "Width": 131
+              },
+              {
+                "WordText": "it",
+                "Left": 770,
+                "Top": 1338,
+                "Height": 40,
+                "Width": 33
+              },
+              {
+                "WordText": "has",
+                "Left": 800,
+                "Top": 1344,
+                "Height": 45,
+                "Width": 59
+              },
+              {
+                "WordText": "made",
+                "Left": 855,
+                "Top": 1356,
+                "Height": 53,
+                "Width": 93
+              },
+              {
+                "WordText": "us",
+                "Left": 945,
+                "Top": 1376,
+                "Height": 43,
+                "Width": 46
+              },
+              {
+                "WordText": "better",
+                "Left": 988,
+                "Top": 1385,
+                "Height": 55,
+                "Width": 102
+              },
+              {
+                "WordText": "investo",
+                "Left": 1086,
+                "Top": 1407,
+                "Height": 59,
+                "Width": 118
+              }
+            ],
+            "MaxHeight": 176,
+            "MinTop": 1290
+          },
+          {
+            "LineText": "ne.",
+            "Words": [
+              {
+                "WordText": "ne",
+                "Left": 544,
+                "Top": 1340,
+                "Height": 30,
+                "Width": 40
+              },
+              {
+                "WordText": ".",
+                "Left": 544,
+                "Top": 1340,
+                "Height": 30,
+                "Width": 40
+              }
+            ],
+            "MaxHeight": 30,
+            "MinTop": 1340
+          },
+          {
+            "LineText": "ctive trial and error over the years we learne",
+            "Words": [
+              {
+                "WordText": "ctive",
+                "Left": 529,
+                "Top": 1376,
+                "Height": 53,
+                "Width": 74
+              },
+              {
+                "WordText": "trial",
+                "Left": 598,
+                "Top": 1393,
+                "Height": 52,
+                "Width": 73
+              },
+              {
+                "WordText": "and",
+                "Left": 668,
+                "Top": 1409,
+                "Height": 51,
+                "Width": 69
+              },
+              {
+                "WordText": "error",
+                "Left": 732,
+                "Top": 1424,
+                "Height": 56,
+                "Width": 87
+              },
+              {
+                "WordText": "over",
+                "Left": 816,
+                "Top": 1444,
+                "Height": 53,
+                "Width": 78
+              },
+              {
+                "WordText": "the",
+                "Left": 890,
+                "Top": 1462,
+                "Height": 51,
+                "Width": 69
+              },
+              {
+                "WordText": "years",
+                "Left": 954,
+                "Top": 1477,
+                "Height": 57,
+                "Width": 92
+              },
+              {
+                "WordText": "we",
+                "Left": 1042,
+                "Top": 1498,
+                "Height": 49,
+                "Width": 60
+              },
+              {
+                "WordText": "learne",
+                "Left": 1097,
+                "Top": 1511,
+                "Height": 61,
+                "Width": 107
+              }
+            ],
+            "MaxHeight": 196,
+            "MinTop": 1376
+          },
+          {
+            "LineText": "s trial and error",
+            "Words": [
+              {
+                "WordText": "s",
+                "Left": 511,
+                "Top": 1459,
+                "Height": 36,
+                "Width": 28
+              },
+              {
+                "WordText": "trial",
+                "Left": 534,
+                "Top": 1466,
+                "Height": 47,
+                "Width": 63
+              },
+              {
+                "WordText": "and",
+                "Left": 591,
+                "Top": 1483,
+                "Height": 47,
+                "Width": 63
+              },
+              {
+                "WordText": "error",
+                "Left": 649,
+                "Top": 1501,
+                "Height": 53,
+                "Width": 84
+              }
+            ],
+            "MaxHeight": 95,
+            "MinTop": 1459
+          },
+          {
+            "LineText": "better farmers, skilled blumbers, and advance",
+            "Words": [
+              {
+                "WordText": "better",
+                "Left": 522,
+                "Top": 1419,
+                "Height": 61,
+                "Width": 92
+              },
+              {
+                "WordText": "farmers",
+                "Left": 609,
+                "Top": 1440,
+                "Height": 69,
+                "Width": 127
+              },
+              {
+                "WordText": ",",
+                "Left": 609,
+                "Top": 1440,
+                "Height": 69,
+                "Width": 127
+              },
+              {
+                "WordText": "skilled",
+                "Left": 731,
+                "Top": 1470,
+                "Height": 66,
+                "Width": 112
+              },
+              {
+                "WordText": "blumbers",
+                "Left": 838,
+                "Top": 1496,
+                "Height": 77,
+                "Width": 158
+              },
+              {
+                "WordText": ",",
+                "Left": 838,
+                "Top": 1496,
+                "Height": 77,
+                "Width": 158
+              },
+              {
+                "WordText": "and",
+                "Left": 991,
+                "Top": 1533,
+                "Height": 57,
+                "Width": 76
+              },
+              {
+                "WordText": "advance",
+                "Left": 1063,
+                "Top": 1550,
+                "Height": 72,
+                "Width": 137
+              }
+            ],
+            "MaxHeight": 204,
+            "MinTop": 1419
+          },
+          {
+            "LineText": "ances? Are w",
+            "Words": [
+              {
+                "WordText": "ances",
+                "Left": 508,
+                "Top": 1503,
+                "Height": 57,
+                "Width": 98
+              },
+              {
+                "WordText": "?",
+                "Left": 508,
+                "Top": 1503,
+                "Height": 57,
+                "Width": 98
+              },
+              {
+                "WordText": "Are",
+                "Left": 601,
+                "Top": 1531,
+                "Height": 48,
+                "Width": 68
+              },
+              {
+                "WordText": "w",
+                "Left": 664,
+                "Top": 1550,
+                "Height": 40,
+                "Width": 42
+              }
+            ],
+            "MaxHeight": 87,
+            "MinTop": 1503
+          },
+          {
+            "LineText": "is to becom",
+            "Words": [
+              {
+                "WordText": "is",
+                "Left": 842,
+                "Top": 1556,
+                "Height": 42,
+                "Width": 24
+              },
+              {
+                "WordText": "to",
+                "Left": 870,
+                "Top": 1556,
+                "Height": 42,
+                "Width": 38
+              },
+              {
+                "WordText": "becom",
+                "Left": 911,
+                "Top": 1556,
+                "Height": 42,
+                "Width": 114
+              }
+            ],
+            "MaxHeight": 42,
+            "MinTop": 1556
+          },
+          {
+            "LineText": "Y to save c",
+            "Words": [
+              {
+                "WordText": "Y",
+                "Left": 502,
+                "Top": 1556,
+                "Height": 42,
+                "Width": 21
+              },
+              {
+                "WordText": "to",
+                "Left": 528,
+                "Top": 1556,
+                "Height": 42,
+                "Width": 26
+              },
+              {
+                "WordText": "save",
+                "Left": 560,
+                "Top": 1556,
+                "Height": 42,
+                "Width": 63
+              },
+              {
+                "WordText": "c",
+                "Left": 628,
+                "Top": 1556,
+                "Height": 42,
+                "Width": 16
+              }
+            ],
+            "MaxHeight": 42,
+            "MinTop": 1556
+          }
+        ],
+        "HasOverlay": true
+      },
+      "TextOrientation": "0",
+      "FileParseExitCode": 1,
+      "ParsedText": "1 for\nnat's\ngap\nlike\nhey\nege\nind\nest\nad\nled\ned\nng\nne\nck,\nnt,\nnk\nW.\nre\nThese soft skills are, I've come to realize, greatlyu\nFinance is overwhelmingly taught as a math-b\nyou put data into a formula and the formula tells\nand it's assumed that you'll just go do it.\nThis is true in personal finance, where you're tol\nmonth emergency fund and save 10% of your salary\nIt's true in investing, where we know the ex\ncorrelations between interest rates and valuations.\nAnd it's true in corporate finance, where CFOs\nthe precise cost of capital.\nIt's not that any of these things are bad or wror\nknowing what to do tells you nothing about what l\nyour head when you try to do it.\nTwo topics impact everyone, whether you are interested\nor not: heal\nmoney,\nThe he:\nndustry is a triumph of modern scien\nrising life\ny across the world. Scientific discoveri\nreplaced\nvirtually\nlideas about how the human body wor\nThe\n* healthier because of it.\nplannin\nustry investing, personal finance, bu\nler story.\nFin\nuniv\noped up the smartest minds coming from\nthe\ndeca\ne last two decades. Financial Engineering\nmajor in Princeton's School of Engineerin\nre any evidence it has made us better investo\nne.\nctive trial and error over the years we learne\ns trial and error\nbetter farmers, skilled blumbers, and advance\nances? Are w\nis to becom\nY to save c",
+      "ErrorMessage": "",
+      "ErrorDetails": ""
+    }
+  ],
+  "OCRExitCode": 1,
+  "IsErroredOnProcessing": false,
+  "ProcessingTimeInMilliseconds": "1281",
+  "SearchablePDFURL": "Searchable PDF not generated as it was not requested."
+}

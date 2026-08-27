@@ -178,9 +178,10 @@ class TestImageDecision:
 
 
 class TestNovelMode:
-    def test_valid_mood_maps_to_audio_tag(self):
+    def test_valid_audio_tag_is_retained(self):
         payload = {
-            "scene_mood": "action",
+            "scene_mood": "chase scene",
+            "audio_tag": "chase",
             "emotion": "Excitement",
             "intensity": 0.84,
             "companion_commentary": "The rescue begins!",
@@ -190,24 +191,19 @@ class TestNovelMode:
             return_value=mock_groq(payload),
         ):
             result = NovelMode().create(AiInput(text="They raced to the rescue."))
-        assert result.data["scene_mood"] == "action"
+        assert result.data["scene_mood"] == "chase scene"
         assert result.data["emotion"] == "excitement"
         assert result.data["intensity"] == 0.84
-        assert result.data["audio_tag"] == NovelMode.AUDIO_TAGS["action"]
+        assert result.data["audio_tag"] == "chase"
 
-    def test_unknown_mood_falls_back_to_neutral(self):
-        payload = {"scene_mood": "invented_mood", "emotion": "x", "intensity": 0.3}
+    def test_unknown_audio_tag_falls_back_to_neutral(self):
+        payload = {"scene_mood": "invented_mood", "audio_tag": "invented_tag", "emotion": "x", "intensity": 0.3}
         with patch(
             "backend.app.modules.ai_engine.engines._get_client",
             return_value=mock_groq(payload),
         ):
             result = NovelMode().create(AiInput(text="Some text."))
-        assert result.data["scene_mood"] == "neutral_narration"
-        assert result.data["audio_tag"] == NovelMode.AUDIO_TAGS["neutral_narration"]
-
-    def test_every_mood_has_an_audio_tag(self):
-        for mood in NovelMode.SCENE_MOODS:
-            assert mood in NovelMode.AUDIO_TAGS
+        assert result.data["audio_tag"] == "neutral_narration"
 
 
 class TestSummaryGenerator:

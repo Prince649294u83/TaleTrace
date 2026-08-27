@@ -14,9 +14,9 @@ No fakes. The only thing supplied by hand is the fingertip, and only when
 MediaPipe finds no hand in the frame — a photo of a page usually has no hand in
 it, and the selector still needs to be shown working against these real boxes.
 
-Requires `GOOGLE_VISION_API_KEY`. `--env` points at the file holding it so the
-key never has to be pasted onto a command line, where it would land in shell
-history.
+Requires `OCR_SPACE_API_KEY` (prototype) or `GOOGLE_VISION_API_KEY` (fallback).
+`--env` points at the file holding them so the keys never have to be pasted
+onto a command line, where they would land in shell history.
 """
 
 from __future__ import annotations
@@ -195,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         "--env",
         type=Path,
         default=Path("backend/app/OCRandGESTURE/.env"),
-        help="file holding GOOGLE_VISION_API_KEY",
+        help="file holding OCR_SPACE_API_KEY or GOOGLE_VISION_API_KEY",
     )
     parser.add_argument("--word", default="", help="word to point at (default: the longest)")
     args = parser.parse_args(argv)

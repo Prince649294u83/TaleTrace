@@ -140,22 +140,22 @@ class PromptBuilder:
             f"{JSON_RULES}"
         )
 
-    def novel_mode_prompt(self, context: ReadingContext, scene_moods: list[str]) -> str:
-        mood_list = "\n".join(f"- {mood}" for mood in scene_moods)
+    def novel_mode_prompt(self, context: ReadingContext, audio_tags: list[str]) -> str:
+        tag_list = "\n".join(f"- {tag}" for tag in audio_tags)
         return (
             f"{PERSONA} The reader is in Novel Mode, where ambient audio "
             "follows the scene.\n\n"
             f"{self.book_description(context)}\n\n"
-            "Classify the passage into exactly ONE scene_mood from this list:\n"
-            f"{mood_list}\n\n"
+            "Choose exactly ONE audio_tag for the ambient background from this list:\n"
+            f"{tag_list}\n\n"
             'Use "neutral_narration" for connective narration or anything that '
             "does not clearly fit.\n\n"
-            "Also report the dominant emotion (a single lowercase word such as "
+            "Also report a brief scene_mood (e.g. 'A quiet conversation'), the dominant emotion (a single lowercase word such as "
             "calm, tension, excitement, sadness, wonder, humour) and an "
             "intensity from 0.0 to 1.0 describing how strongly the scene "
             "carries that emotion, so audio can fade smoothly between scenes.\n\n"
             "Output this JSON structure:\n"
-            '{"scene_mood": "string", "emotion": "string", '
+            '{"scene_mood": "string", "audio_tag": "string", "emotion": "string", '
             '"intensity": 0.0, '
             '"companion_commentary": "one sentence under 15 words for the OLED"}\n\n'
             f"{JSON_RULES}"

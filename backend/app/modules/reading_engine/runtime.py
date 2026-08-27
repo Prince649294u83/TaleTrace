@@ -244,13 +244,17 @@ class ReadingRuntime:
         *,
         finger: FingerPoint | None = None,
         meaning_gesture: bool = False,
-    ) -> SelectionResult:
+    ) -> tuple[SelectionResult, list[Any]]:
         """A frame from the device, for pointing. Publishes, then drains.
 
         The words come from the OCR pipeline's current page rather than from a
         separate recognition pass — the reader points at the page the system has
         already read, and running OCR twice would let the two disagree about where
         a word is.
+
+        Returns ``(selection, results)`` where ``results`` is the list of values
+        returned by the event handlers (typically ``MeaningLookupResult`` or
+        ``None``).  DeviceLoop uses this to send lookups to the OLED.
         """
 
         words = self.engine.ocr.words if self.engine.ocr is not None else ()
@@ -258,8 +262,8 @@ class ReadingRuntime:
             image, words, finger=finger, meaning_gesture=meaning_gesture
         )
         self.last_selection = result
-        await self.drain()
-        return result
+        drain_results = await self.drain()
+        return result, drain_results
 
     # -------------------------------------------------------------------- events
 
@@ -279,21 +283,26 @@ class ReadingRuntime:
 
         return list(self._pending)
 
-    async def drain(self) -> int:
+    async def drain(self) -> list[Any]:
         """Hand every queued gesture event to the engine, in order.
 
-        Returns how many were handled. Order is preserved because these events
-        are not independent: a `WORD_SELECTED` followed by a `MEANING_REQUESTED`
-        is the reader pointing and then asking, and handling them out of order
-        would look up whatever word came next.
+        Returns a list of values from each handler.  Most events return ``None``;
+        ``MEANING_REQUESTED`` returns a ``MeaningLookupResult`` when the AI
+        produced an explanation, giving the caller what it needs for the OLED
+        without reaching into engine state.
+
+        Order is preserved because these events are not independent: a
+        ``WORD_SELECTED`` followed by a ``MEANING_REQUESTED`` is the reader
+        pointing and then asking, and handling them out of order would look up
+        whatever word came next.
         """
 
-        handled = 0
+        results: list[Any] = []
         while self._pending:
             event, payload = self._pending.popleft()
-            await self.engine.handle_gesture_event(event, self._translate(event, payload))
-            handled += 1
-        return handled
+            result = await self.engine.handle_gesture_event(event, self._translate(event, payload))
+            results.append(result)
+        return results
 
     def _translate(
         self, event: SessionEvent, payload: dict[str, Any]

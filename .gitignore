@@ -50,3 +50,6 @@ backend/app/OCRandGESTURE/Gesture/
 # generated AST, and `.graphify_python` records an absolute path to one machine's
 # interpreter, which is wrong for everybody else who clones this.
 graphify-out/
+
+# Dynamic Freesound downloads (not permanent assets)
+runtime_audio_cache/

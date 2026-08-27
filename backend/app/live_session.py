@@ -57,6 +57,10 @@ from backend.app.modules.merge_memory.reconstruction import GroqReconstructor
 from backend.app.modules.reading_engine.ai_bridge import bridge_for_session
 from backend.app.modules.reading_engine.device_loop import DeviceLoop
 from backend.app.modules.reading_engine.runtime import ReadingRuntime
+from backend.app.modules.database.session import get_db
+from backend.app.modules.database.models import Reader
+from backend.app.modules.audio_engine.speech_provider import get_provider, LocalAudioSink
+from backend.app.modules.audio_engine.playback_engine import PlaybackEngine
 from backend.app.shared.groq_keys import (
     AI_ENGINE_VARIABLE,
     CHAT_MODEL_VARIABLE,
@@ -79,20 +83,34 @@ _REHEARSAL_CYCLE_SECONDS = 30.0
 _REHEARSAL_HORIZON_SECONDS = 1800.0
 
 
+import time
+
 def _camera_live(camera: Esp32Camera) -> bool:
     """Whether a frame can actually be fetched, not merely whether a URL is set.
 
     A URL pointing at a device which is powered off is the most common failure and
     it looks exactly like a correct configuration until a frame is asked for.
     """
-
-    return camera.configured and camera.frame() is not None
+    if not camera.configured:
+        return False
+    
+    for _ in range(3):
+        if camera.frame() is not None:
+            return True
+        time.sleep(1.0)
+    return False
 
 
 def _buttons_live(buttons: Esp32Buttons) -> bool:
     """Whether the button endpoint answers. Same reasoning as `_camera_live`."""
-
-    return buttons.configured and buttons.read().reachable
+    if not buttons.configured:
+        return False
+        
+    for _ in range(3):
+        if buttons.read().reachable:
+            return True
+        time.sleep(1.0)
+    return False
 
 
 def _groq_models_live(key: str) -> tuple[bool, str]:
@@ -232,15 +250,23 @@ def preflight(*, probe_models: bool = False) -> list[tuple[str, bool, str]]:
 
     camera = Esp32Camera()
     buttons = Esp32Buttons()
+    ocr_space = bool((os.environ.get("OCR_SPACE_API_KEY") or "").strip())
     vision = bool((os.environ.get("GOOGLE_VISION_API_KEY") or "").strip())
+    ocr_ok = ocr_space or vision
+    if ocr_space:
+        ocr_detail = "OCR.Space Engine 2 (prototype)"
+    elif vision:
+        ocr_detail = "Google Vision (fallback)"
+    else:
+        ocr_detail = "no OCR key -- set OCR_SPACE_API_KEY or GOOGLE_VISION_API_KEY"
     merge_groq = GroqReconstructor().available
     ai_groq = bool(ai_engine_key())
 
     rows: list[tuple[str, bool, str]] = [
         (
-            "Google Vision",
-            vision,
-            "ready" if vision else "GOOGLE_VISION_API_KEY not set — no text can be read",
+            "OCR",
+            ocr_ok,
+            ocr_detail,
         ),
         # Two rows, because the two keys fail independently and the operator
         # needs to know which half is down: one means rough page text, the other
@@ -319,18 +345,29 @@ async def _run(args: argparse.Namespace) -> int:
         return 0 if all(ok for _, ok, _ in rows) else 1
 
     ready = dict((name, ok) for name, ok, _ in rows)
-    if not ready["Google Vision"]:
+    if not ready["OCR"]:
         # The one hard stop. Everything else degrades to a worse session; this
         # degrades to a session with no text in it at all.
-        print("Cannot start: OCR has no API key. Set GOOGLE_VISION_API_KEY in .env")
+        print("Cannot start: OCR has no API key. Set OCR_SPACE_API_KEY (or GOOGLE_VISION_API_KEY) in .env")
         return 1
 
     camera, buttons, notes = detect_devices(
         buttons_mode=args.buttons, seconds=args.seconds
     )
     if camera is None or buttons is None:
-        print("Cannot start: no camera. Check the device is powered and on the network.")
-        return 1
+        if args.wait_for_hardware:
+            print("Waiting for camera to become available...")
+            while True:
+                await asyncio.sleep(2.0)
+                camera, buttons, notes = detect_devices(
+                    buttons_mode=args.buttons, seconds=args.seconds
+                )
+                if camera is not None and buttons is not None:
+                    print("Camera detected. Starting session.")
+                    break
+        else:
+            print("Cannot start: no camera. Check the device is powered and on the network.")
+            return 1
 
     for note in notes:
         print(f"  {note}")
@@ -344,6 +381,14 @@ async def _run(args: argparse.Namespace) -> int:
     # and every page would come back unrated.
     speed = hydrate_reading_speed()
     ai = bridge_for_session()
+    
+    # Read the chosen TTS voice from the reader's preferences
+    db = next(get_db())
+    reader = db.get(Reader, READER_ID)
+    voice_id = reader.device_prefs.get("ttsVoice") if reader and reader.device_prefs else None
+    provider = get_provider(voice_id=voice_id)
+    audio = PlaybackEngine(session_id=SESSION_ID, provider=provider, sink=LocalAudioSink())
+
     if ai is None:
         print(f"  No {AI_ENGINE_VARIABLE}: Meaning Mode will pause but not explain,")
         print("  and the session will finish with no summary, flashcards or quiz.\n")
@@ -351,6 +396,7 @@ async def _run(args: argparse.Namespace) -> int:
     runtime = ReadingRuntime.build_live(
         session_id=SESSION_ID,
         reader_id=READER_ID,
+        audio=audio,
         ai=ai,
         speed=speed,
     )
@@ -401,6 +447,11 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=None,
         help="stop after this many seconds instead of running until Ctrl-C",
+    )
+    parser.add_argument(
+        "--wait-for-hardware",
+        action="store_true",
+        help="wait indefinitely for the camera to become available instead of exiting",
     )
     parser.add_argument(
         "--buttons",

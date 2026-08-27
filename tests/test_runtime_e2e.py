@@ -736,7 +736,7 @@ class TestGestureScenarios:
         assert runtime.engine.state.pointer.sentence_index == 0
 
         clock.advance(15)
-        result = await runtime.feed_gesture_frame(
+        result, _ = await runtime.feed_gesture_frame(
             blank_frame(),
             finger=FingerPoint(x=100.0, y=44.0, confidence=0.9, direction=(0.0, -1.0)),
         )
@@ -772,7 +772,7 @@ class TestGestureScenarios:
         assert len(runtime.engine.events) == events_before
 
         handled = await runtime.drain()
-        assert handled > 0
+        assert len(handled) > 0
         assert runtime.pending == []
         assert runtime.engine.state.pointer != pointer_before
 
@@ -825,7 +825,7 @@ class TestGestureScenarios:
         )
 
         clock.advance(15)
-        result = await runtime.feed_gesture_frame(
+        result, _ = await runtime.feed_gesture_frame(
             blank_frame(),
             finger=FingerPoint(x=100.0, y=44.0, confidence=0.9, direction=(0.0, -1.0)),
         )
@@ -875,7 +875,7 @@ class TestGestureScenarios:
         events_before = len(runtime.engine.events)
 
         clock.advance(15)
-        result = await runtime.feed_gesture_frame(
+        result, _ = await runtime.feed_gesture_frame(
             blank_frame(),
             finger=FingerPoint(x=580.0, y=190.0, confidence=0.2, direction=None),
         )
@@ -894,7 +894,7 @@ class TestGestureScenarios:
         await runtime.engine.start_session()
 
         clock.advance(20)
-        result = await runtime.feed_gesture_frame(
+        result, _ = await runtime.feed_gesture_frame(
             blank_frame(),
             finger=FingerPoint(x=100.0, y=44.0, confidence=0.9, direction=(0.0, -1.0)),
             meaning_gesture=True,
@@ -1573,7 +1573,7 @@ class TestAiScenarios:
         assert runtime.engine.state.pointer.paragraph_index == 0
 
         clock.advance(20)
-        result = await runtime.feed_gesture_frame(
+        result, _ = await runtime.feed_gesture_frame(
             blank_frame(height=400),
             # Inside "grandfather", the fifth word of the third paragraph.
             finger=FingerPoint(x=400.0, y=310.0, confidence=0.9, direction=(0.0, -1.0)),
@@ -1920,7 +1920,7 @@ class TestGoldenScenario:
         #    paragraph while the pointer sits in the second, and hold Meaning Mode.
         clock.advance(25)
         pointer_before_meaning = engine.state.pointer
-        result = await runtime.feed_gesture_frame(
+        result, _ = await runtime.feed_gesture_frame(
             blank_frame(height=400),
             finger=self.IN_PARAGRAPH_THREE,
             meaning_gesture=True,

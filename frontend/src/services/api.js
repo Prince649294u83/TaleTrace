@@ -137,6 +137,10 @@ export const api = {
     });
   },
 
+  getVoices: async () => {
+    return request('/voices');
+  },
+
   // --------------------------------------------------------- dashboard / analysis
   getDashboard: () => request('/dashboard'),
 
