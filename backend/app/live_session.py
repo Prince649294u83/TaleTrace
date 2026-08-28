@@ -400,7 +400,8 @@ async def _run(args: argparse.Namespace) -> int:
         ai=ai,
         speed=speed,
     )
-    loop = DeviceLoop(runtime=runtime, camera=camera, buttons=buttons)
+    display = buttons if isinstance(buttons, Esp32Buttons) else None
+    loop = DeviceLoop(runtime=runtime, camera=camera, buttons=buttons, display=display)
 
     print("Reading. Momentary button re-reads from where you point;")
     print("the toggle holds Meaning Mode. Ctrl-C to finish.\n")

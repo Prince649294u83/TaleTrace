@@ -168,6 +168,7 @@ Everything in `.env` is optional except where noted:
 | `FREESOUND_API_KEY` | Dynamic ambient audio fallback | Falls back to the local curated starter pack or silence. |
 | `ESP32_CAM_CAPTURE_URL` | Live camera, e.g. `http://192.168.1.200/capture` | Reported unconfigured; the runtime still starts. |
 | `ESP32_BUTTONS_URL` | Live buttons, e.g. `http://192.168.1.26:8080/buttons` | Reported unconfigured; a live session substitutes a scheduled reader (see §4). |
+| `ESP32_DISPLAY_URL` | Live OLED display, e.g. `http://192.168.1.26:8080/display` | Defaults to same host as buttons URL; OLED updates gracefully degrade. |
 | `AUDIO_PROVIDER` | `edge` (default, neural voices, needs network), `offline` (pyttsx3, OS voices), `fake` (tests) | |
 | `EDGE_TTS_VOICE` | Which Edge voice, default `en-US-AriaNeural` | |
 
@@ -184,7 +185,7 @@ down.
 python -m pytest -q
 ```
 
-Expected: **703 passed**. No API key, no network and no hardware are required —
+Expected: **799 passed**. No API key, no network and no hardware are required —
 if this does not pass on a clean checkout, stop here, because nothing further
 will make sense.
 
@@ -194,7 +195,7 @@ The website has its own small suite, which needs Node.js:
 cd frontend && npm install && npm test
 ```
 
-Expected: **7 passed**. It covers the one thing that is easy to get silently
+Expected: **11 passed**. It covers the one thing that is easy to get silently
 wrong — that the Analysis page's numbers come from the server and there is no
 local fallback left to quietly replace them. See §2.4.
 

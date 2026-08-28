@@ -53,3 +53,5 @@ graphify-out/
 
 # Dynamic Freesound downloads (not permanent assets)
 runtime_audio_cache/
+scratch/
+recordings/

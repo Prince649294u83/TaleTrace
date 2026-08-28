@@ -12,6 +12,7 @@ which matters because the config travels into scoring loops that run per frame.
 """
 
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -23,9 +24,7 @@ class SelectionStatus(str, Enum):
 
     The failure cases are distinct on purpose: `NO_FINGER` means the reader is
     not pointing, `LOW_CONFIDENCE` means they are but the system will not guess,
-    and `NO_WORD_FOUND` means they pointed somewhere with no text. The runtime
-    responds differently to each — only the middle one is worth telling the
-    reader about.
+    and `NO_WORD_FOUND` means they pointed somewhere with no text.
     """
 
     SUCCESS = "success"
@@ -33,16 +32,12 @@ class SelectionStatus(str, Enum):
     LOW_CONFIDENCE = "low_selection_confidence"
     NO_WORD_FOUND = "no_word_in_search_region"
     OCR_EMPTY = "ocr_data_empty"
+    PAGE_CONTEXT_MISMATCH = "page_context_mismatch"
+    OUT_OF_BOUNDS = "out_of_bounds"
 
 
 class SelectionStrategy(str, Enum):
-    """How to interpret where the finger is.
-
-    TOUCH suits a reader resting a fingertip on the word; POINT suits one
-    gesturing at it from below. AUTO picks per frame based on whether MediaPipe
-    gave a usable pointing direction, which is the only one that behaves for
-    both readers without being told which they are.
-    """
+    """How to interpret where the finger is."""
 
     STATIC_BOX = "static_box"
     DIRECTION_CONE = "direction_cone"
@@ -52,14 +47,85 @@ class SelectionStrategy(str, Enum):
     HYBRID = "hybrid"
 
 
-class FingerPoint(BaseModel):
-    """Where the fingertip is, and how much to trust it.
+class CoordinateSpace(BaseModel):
+    """Geometric definition of a frame or page coordinate space."""
 
-    `direction` is the pointing unit vector, present only when MediaPipe resolved
-    the finger joints. `None` means the contour fallback ran and the system knows
-    where the finger is but not where it points — the selector widens its search
-    rather than assuming straight up is right.
-    """
+    model_config = ConfigDict(frozen=True)
+
+    width: int
+    height: int
+    crop: tuple[int, int, int, int] | None = None
+    rotation: int = 0
+    mirror: bool = False
+
+
+class PageContext(BaseModel):
+    """Stable spatial and semantic coordinate space for a page."""
+
+    model_config = ConfigDict(frozen=True)
+
+    page_id: str
+    page_version: int = 1
+    geometry_hash: str = ""
+    coordinate_space: CoordinateSpace = Field(default_factory=lambda: CoordinateSpace(width=1024, height=768))
+    page_region: tuple[int, int, int, int] = (0, 0, 1024, 768)
+    gesture_region: tuple[int, int, int, int] = (0, 0, 1024, 768)
+    ocr_region: tuple[int, int, int, int] = (0, 0, 1024, 768)
+    ocr_words: tuple[RecognizedWord, ...] = ()
+    created_at: float = 0.0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class FrameContext(BaseModel):
+    """Single captured camera frame bound to a PageContext."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    frame_id: int
+    page_id: str
+    captured_at: float
+    source_space: CoordinateSpace
+    image: Any = None
+
+
+class DetectionObservation(BaseModel):
+    """Individual detector tier output."""
+
+    model_config = ConfigDict(frozen=True)
+
+    detector_name: str  # "mediapipe", "partial_finger", "tracker"
+    x: float
+    y: float
+    direction: tuple[float, float] | None = None
+    confidence: float = 0.0
+    geometry_score: float = 0.0
+    direction_confidence: float = 1.0
+    is_predicted: bool = False
+    timestamp: float = 0.0
+    frame_id: int = 0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class FingerObservation(BaseModel):
+    """Fused fingertip observation for word selection."""
+
+    model_config = ConfigDict(frozen=True)
+
+    frame_id: int
+    page_id: str
+    x: float
+    y: float
+    direction: tuple[float, float] | None = None
+    confidence: float = 0.0
+    geometry_score: float = 0.0
+    primary_source: str = "mediapipe"
+    supporting_sources: tuple[str, ...] = ()
+    provenance: str = "mediapipe"  # "fused", "mediapipe", "partial_finger", "tracked"
+    is_predicted: bool = False
+
+
+class FingerPoint(BaseModel):
+    """Where the fingertip is, and how much to trust it."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -87,16 +153,7 @@ class TextLine(BaseModel):
 
 
 class CoordinateTransformer(BaseModel):
-    """Map a point between two frames of reference.
-
-    The gesture frame and the OCR frame are not always the same image. The ESP32
-    streams one resolution, MediaPipe may run on a downscaled copy, and the OCR
-    provider may have been given a third. A fingertip found in one coordinate
-    space and scored against boxes from another is off by a scale factor, which
-    reads as the reader pointing at the wrong line rather than as an error.
-
-    Identity by default, so a caller that has only one frame pays nothing.
-    """
+    """Map a point between two frames of reference."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -120,8 +177,6 @@ class SelectionConfig(BaseModel):
     selection_strategy: SelectionStrategy = SelectionStrategy.AUTO
 
     # Search region, in multiples of the average line height / word width.
-    # Asymmetric because a reader points *at* a word from below it: far more of
-    # the useful region is above the fingertip than below.
     search_height_above: float = 1.5
     search_height_below: float = 0.3
     search_width_ratio: float = 3.0
@@ -135,11 +190,12 @@ class SelectionConfig(BaseModel):
     line_cluster_tolerance: float = 0.5
     confidence_threshold: float = 0.4
     mediapipe_confidence: float = 0.5
-    # Below this MediaPipe score the contour fallback is also run and the better
-    # of the two is taken.
     fallback_trigger: float = 0.75
 
     use_direction: bool = True
+    selection_margin: float = 0.05
+    selection_ratio: float = 1.15
+    hysteresis_margin: float = 0.15
 
 
 class ScoredCandidate(BaseModel):
@@ -157,12 +213,7 @@ class ScoredCandidate(BaseModel):
 
 
 class SelectionResult(BaseModel):
-    """What the reader pointed at, with the context the AI Engine needs.
-
-    Carries `context` (the containing sentence) as well as the word, because a
-    word explanation without its sentence is guesswork — "bank" cannot be defined
-    without knowing whether the page is about rivers or money.
-    """
+    """What the reader pointed at, with the context the AI Engine needs."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -180,6 +231,7 @@ class SelectionResult(BaseModel):
     paragraph_index: int = -1
     candidate_scores: tuple[ScoredCandidate, ...] = ()
     selection_reason: str = ""
+    detector: str = "mediapipe"
 
     image_size: tuple[int, int] = (0, 0)
     selection_time_ms: float = 0.0
@@ -187,3 +239,4 @@ class SelectionResult(BaseModel):
     @property
     def succeeded(self) -> bool:
         return self.status is SelectionStatus.SUCCESS
+

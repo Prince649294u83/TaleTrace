@@ -425,7 +425,6 @@ def _finish_selection(
         for member in paragraph_words[len(paragraph_words) - len(current):]:
             if member.line_index == word.line_index and member.word_index == word.word_index:
                 target_sentence = len(sentences) - 1
-                break
 
     status = (
         SelectionStatus.SUCCESS
@@ -448,26 +447,26 @@ def _finish_selection(
         paragraph_index=word.paragraph_index,
         candidate_scores=tuple(candidate_scores or []),
         selection_reason=reason,
+        detector=finger.detection_method,
     )
 
 
 def _ends_sentence(text: str) -> bool:
     """Whether a word's trailing punctuation closes a sentence."""
-
     if not text:
         return False
     return text[-1] in ".!?" or (len(text) > 1 and text[-2] in ".!?" and text[-1] in "\"'")
 
 
 def _uses_direction(finger: FingerPoint, config: SelectionConfig) -> bool:
+    """Check whether pointing direction is usable without assuming upward default."""
+    if not config.use_direction or finger.direction is None:
+        return False
+
     return (
         config.selection_strategy
         in (SelectionStrategy.DIRECTION_CONE, SelectionStrategy.POINT, SelectionStrategy.HYBRID)
-        or (
-            config.selection_strategy == SelectionStrategy.AUTO
-            and finger.direction is not None
-            and finger.detection_method == "mediapipe"
-        )
+        or (config.selection_strategy == SelectionStrategy.AUTO and finger.direction is not None)
     )
 
 

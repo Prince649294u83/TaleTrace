@@ -23,8 +23,11 @@ call `decode()`.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
+import time
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -32,6 +35,18 @@ logger = logging.getLogger(__name__)
 # The device answers in well under a second on a healthy network. A longer
 # timeout would stall the control loop behind a device that has gone away.
 _CAPTURE_TIMEOUT = 1.5
+
+
+@dataclass(frozen=True)
+class CameraFrame:
+    """One captured camera frame with device-side payload checksum and metadata."""
+
+    frame_id: int
+    captured_at: float
+    jpeg_bytes: bytes
+    jpeg_hash: str
+    width: int = 0
+    height: int = 0
 
 
 class Esp32Camera:
@@ -59,6 +74,8 @@ class Esp32Camera:
         self._session = session
         self._frames_read = 0
         self._failures = 0
+        self._last_hash: str | None = None
+        self._last_capture_time: float = 0.0
 
     @property
     def configured(self) -> bool:
@@ -79,6 +96,10 @@ class Esp32Camera:
 
         return self._failures
 
+    @property
+    def last_hash(self) -> str | None:
+        return self._last_hash
+
     def _http(self) -> Any:
         if self._session is None:
             import requests
@@ -88,19 +109,14 @@ class Esp32Camera:
             self._session = requests.Session()
         return self._session
 
-    def frame(self) -> bytes | None:
-        """Capture one JPEG frame, or None if the device did not answer.
-
-        Returns None rather than raising, exactly as the reference did. Every
-        caller is a loop that should try again on the next tick; an exception
-        would make a dropped frame end the session.
-        """
-
+    def capture_frame(self) -> CameraFrame | None:
+        """Capture one CameraFrame with checksum freshness and monotonic ID."""
         if not self.configured:
             logger.warning("ESP32_CAM_CAPTURE_URL is not set; no frames available")
             self._failures += 1
             return None
 
+        capture_start = time.time()
         try:
             response = self._http().get(self.capture_url, timeout=self.timeout)
         except Exception as error:
@@ -119,7 +135,27 @@ class Esp32Camera:
             return None
 
         self._frames_read += 1
-        return content
+        jpeg_hash = hashlib.md5(content).hexdigest()
+        self._last_hash = jpeg_hash
+        self._last_capture_time = capture_start
+
+        return CameraFrame(
+            frame_id=self._frames_read,
+            captured_at=capture_start,
+            jpeg_bytes=content,
+            jpeg_hash=jpeg_hash,
+        )
+
+    def frame(self) -> bytes | None:
+        """Capture one JPEG frame, or None if the device did not answer.
+
+        Returns None rather than raising, exactly as the reference did. Every
+        caller is a loop that should try again on the next tick; an exception
+        would make a dropped frame end the session.
+        """
+
+        cam_frame = self.capture_frame()
+        return cam_frame.jpeg_bytes if cam_frame is not None else None
 
     @staticmethod
     def decode(jpeg_bytes: bytes) -> Any | None:

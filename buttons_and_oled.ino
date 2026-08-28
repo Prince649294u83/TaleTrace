@@ -131,6 +131,23 @@ void handleButtons() {
   server.send(200, "application/json", jsonResponse);
 }
 
+// GET /health -> Returns diagnostic device telemetry
+void handleHealth() {
+  String jsonResponse = "{";
+  jsonResponse += "\"device\":\"button_oled\",";
+  jsonResponse += "\"protocol_version\":1,";
+  jsonResponse += "\"firmware_version\":\"1.2.0\",";
+  jsonResponse += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
+  jsonResponse += "\"port\":8080,";
+  jsonResponse += "\"uptime_ms\":" + String(millis()) + ",";
+  jsonResponse += "\"wifi_rssi\":" + String(WiFi.RSSI()) + ",";
+  jsonResponse += "\"oled\":true";
+  jsonResponse += "}";
+
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, "application/json", jsonResponse);
+}
+
 // POST /display -> Receives backend text definitions
 void handleDisplay() {
   String bodyText = "";
@@ -141,14 +158,22 @@ void handleDisplay() {
     bodyText = server.argName(0);
   }
 
-  if (bodyText.length() > 0) {
-    updateOLED(bodyText);
-    server.sendHeader("Access-Control-Allow-Origin", "*");
-    server.send(200, "text/plain", "Display updated successfully");
-  } else {
+  if (bodyText.length() == 0) {
     server.sendHeader("Access-Control-Allow-Origin", "*");
     server.send(400, "text/plain", "Bad Request: Empty Body");
+    return;
   }
+
+  // Check maximum reasonable payload length (formattedLines capacity is 40 lines * 18 chars ~ 720 chars)
+  if (bodyText.length() > 1500) {
+    server.sendHeader("Access-Control-Allow-Origin", "*");
+    server.send(413, "text/plain", "Payload Too Large: Text exceeds buffer capacity");
+    return;
+  }
+
+  updateOLED(bodyText);
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, "text/plain", "Display updated successfully");
 }
 
 void handleNotFound() {
@@ -177,9 +202,14 @@ void setup() {
   }
 
   Serial.println("\n✅ DevKit WiFi Connected!");
+  Serial.print("📡 IP Address: ");
+  Serial.println(WiFi.localIP());
+  Serial.print("📶 RSSI: ");
+  Serial.println(WiFi.RSSI());
 
   server.on("/buttons", HTTP_GET, handleButtons);
   server.on("/display", HTTP_POST, handleDisplay);
+  server.on("/health", HTTP_GET, handleHealth);
   server.onNotFound(handleNotFound);
 
   server.begin();

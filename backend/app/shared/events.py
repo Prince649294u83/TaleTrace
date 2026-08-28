@@ -66,3 +66,7 @@ class SessionEvent(str, Enum):
     # system simply stops being able to see them.
     CAMERA_ON = "CAMERA_ON"
     CAMERA_OFF = "CAMERA_OFF"
+
+    # Button device reachability, tracked independently of camera streaming.
+    BUTTON_DEVICE_ONLINE = "BUTTON_DEVICE_ONLINE"
+    BUTTON_DEVICE_OFFLINE = "BUTTON_DEVICE_OFFLINE"
