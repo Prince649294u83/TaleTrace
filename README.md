@@ -448,129 +448,267 @@ GET    /reading-speed/sessions/{session_id}/progress
 GET    /reading-speed/sessions/{session_id}/prediction
 POST   /reading-speed/sessions/{session_id}/finish
 DELETE /reading-speed/sessions/{session_id}
+## 3. The hardware architecture and rig integration
+
+The physical TaleTrace rig consists of two independent ESP32 devices communicating over local HTTP with the backend host:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                                   PHYSICAL RIG OVERVIEW                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                          │
+│   [ ESP32-CAM ] (Port 80)                                                                │
+│     • OV2640 Camera Sensor                                                               │
+│     • Serves GET /capture (single JPEG snapshot)                                         │
+│     • Default IP: http://192.168.1.200/capture                                          │
+│                                                                                          │
+│   [ ESP32 DevKit (Buttons + OLED) ] (Port 8080)                                          │
+│     • Firmware: buttons_and_oled.ino                                                     │
+│     • GPIO 4: Momentary Button (Active LOW, INPUT_PULLUP)                                │
+│     • GPIO 5: Latching Toggle Switch (Active LOW, INPUT_PULLUP)                          │
+│     • I2C SH1106 128x64 OLED Display (SDA: GPIO 21, SCL: GPIO 22, Font: ProFont12)       │
+│     • Serves GET  /health   → Self-describing diagnostic JSON telemetry                  │
+│     • Serves GET  /buttons  → Button level JSON {"btn_momentary": bool, ...}             │
+│     • Serves POST /display  → Raw text/plain explanation (Firmware owns wrapping/paging) │
+│     • Default IP: http://192.168.1.26:8080                                               │
+│                                                                                          │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The Focus Analytics Engine has no routes on purpose — it observes events and is
-read at the end of a session, never polled.
-
-</details>
-
----
-
-## 3. The hardware
-
-Two devices, each with its own firmware sketch under
-`backend/app/OCRandGESTURE/`:
-
-| Device | Sketch | Serves | Endpoint |
+| Device | Firmware Sketch | Serves | Endpoints & Function |
 |---|---|---|---|
-| ESP32-CAM | `espcam/Almost_final.ino` | port 80 | `GET /capture` → one JPEG |
-| ESP32 DevKit (buttons) | `esp32/esp32.ino` | port 8080 | `GET /buttons` → button state JSON |
-
-### 3.1 Flashing and wiring
-
-1. Flash both sketches with the Arduino IDE, setting your Wi-Fi SSID and
-   password at the top of each.
-2. Put both devices on the **same network as the machine running TaleTrace**.
-   A phone hotspot is fine; a guest network with client isolation is not.
-3. Read each device's IP from the serial monitor at boot.
-4. Put those into `.env`:
-   ```
-   ESP32_CAM_CAPTURE_URL="http://<cam-ip>/capture"
-   ESP32_BUTTONS_URL="http://<devkit-ip>:8080/buttons"
-   ```
-5. Confirm by hand before involving TaleTrace:
-   ```bash
-   curl -o frame.jpg http://<cam-ip>/capture
-   curl http://<devkit-ip>:8080/buttons
-   ```
-6. Then:
-   ```bash
-   python -m backend.app.live_session --check
-   ```
-
-### 3.2 The two controls
-
-| Control | Type | Does |
-|---|---|---|
-| Momentary button | press | resolve the word under the fingertip and re-read from there |
-| Toggle switch | hold | Meaning Mode: pause narration, explain the word being pointed at |
-
-The rig has **only these two**. `SESSION_PAUSED` / `SESSION_RESUMED` and audio
-on/off exist in the event vocabulary and the Reading Engine handles them, but
-nothing on the hardware produces them — those paths are driven by
-`VirtualButtons` today. That is a wiring gap, not a software one.
-
-### 3.3 Framing the page
-
-- The whole page in frame, filling it as much as possible.
-- Even light, no hard shadow across the text, no glare from a lamp.
-- The finger **on** the word, not hovering above it — the fingertip's position
-  is the query.
-- Only the fingertip needs to be visible. A partly-visible hand is fine.
+| **ESP32-CAM** | `backend/app/OCRandGESTURE/espcam/Almost_final.ino` | Port 80 | `GET /capture` → One JPEG image frame of the book page |
+| **ESP32 DevKit** | `buttons_and_oled.ino` | Port 8080 | `GET /health` → Protocol & device health telemetry<br>`GET /buttons` → Raw GPIO button states<br>`POST /display` → Text rendered to 128x64 SH1106 OLED |
 
 ---
 
-## 4. Hardware auto-detection
+### 3.1 Wiring and pinouts
 
-Each device is detected on its own and substituted on its own, because a rig
-arrives in halves and is repaired in halves.
+#### ESP32 DevKit (Buttons & OLED) Pinout Table
 
-| Camera | Buttons | What runs |
-|---|---|---|
-| reachable | reachable | Full hardware. Nothing announced. |
-| reachable | not reachable | **Real camera + scheduled reader.** Announced. |
-| not reachable | either | Refuses to start; use `simulated_session`. |
+| Peripheral | ESP32 Pin | Mode | Logic / Description |
+|---|---|---|---|
+| **Momentary Button** | `GPIO 4` | `INPUT_PULLUP` | Active **LOW** (0 when pressed, 1 when released). Re-reads from pointer. |
+| **Toggle Switch** | `GPIO 5` | `INPUT_PULLUP` | Active **LOW** (0 when ON / Meaning Mode, 1 when OFF / Normal Reading). |
+| **OLED SDA** | `GPIO 21` | `I2C` | Data line for SH1106 128x64 OLED display. |
+| **OLED SCL** | `GPIO 22` | `I2C` | Clock line for SH1106 128x64 OLED display. |
+| **Power (VCC)** | `3.3V` / `5V` | Power | Connect to OLED VCC and Button pull-up rails. |
+| **Ground (GND)** | `GND` | Ground | Common ground across buttons, OLED, and ESP32. |
 
-The half-built case is the dangerous one. With unreachable buttons and no
-detection, the session runs, reads frames, and can never fire a reading update
-or Meaning Mode — a blind session that is indistinguishable from a working one
-until someone notices the gesture count is zero. So the buttons fall back to a
-repeating schedule (point at a word, hold Meaning Mode, release, every 30s for
-the length of the run) and the substitution is **printed, never silent**:
+> [!IMPORTANT]
+> **Active LOW logic**: Both buttons use internal pull-ups (`INPUT_PULLUP`). Pressing the button pulls the GPIO pin to `GND`. The firmware inverts this reading so that `GET /buttons` reports `true` when pressed / ON and `false` when released / OFF.
 
-```
-  buttons: not reachable — running a scheduled rehearsal instead, so the camera
-  can still be tested end to end
-```
+---
 
-There is deliberately **no virtual-camera fallback** in `live_session`. A live
-session that quietly replays JPEGs is a simulation wearing the wrong label, and
-that is how a hardware bug survives a green test. `simulated_session` already
-does that job honestly.
+### 3.2 Firmware flashing and network configuration
 
-Detection is a guess about the physical world, so it can be overridden:
+1. **Open the Arduino IDE** and install the required libraries:
+   - `U8g2` (by olikraus) for the SH1106 OLED display.
+   - `WiFi` and `WebServer` (ESP32 core by Espressif).
+2. **Flash ESP32-CAM**:
+   - Open `backend/app/OCRandGESTURE/espcam/Almost_final.ino`.
+   - Update `ssid` and `password` with your 2.4GHz Wi-Fi credentials.
+   - Select Board: `AI Thinker ESP32-CAM`, set Partition Scheme: `Huge APP (3MB No OTA)`.
+   - Flash and open Serial Monitor (`115200` baud) to note the assigned IP address (e.g., `192.168.1.200`).
+3. **Flash ESP32 DevKit**:
+   - Open `buttons_and_oled.ino`.
+   - Update `ssid` and `password` with your Wi-Fi credentials.
+   - Set static IP (default `192.168.1.26`, Gateway: `192.168.1.1`, Subnet: `255.255.255.0`) or let it acquire DHCP.
+   - Flash and verify in Serial Monitor (`115200` baud). You should see:
+     ```text
+     [BOOT] TaleTrace Button & Display Controller
+     [BOOT] Firmware version: 1.2.0, Protocol version: 1
+     [WIFI] Connected! IP: 192.168.1.26, RSSI: -54 dBm
+     [SERVER] HTTP server started on port 8080
+     ```
+4. **Update `.env` on your computer**:
+   ```env
+   ESP32_CAM_CAPTURE_URL="http://192.168.1.200/capture"
+   ESP32_BUTTONS_URL="http://192.168.1.26:8080/buttons"
+   ESP32_DISPLAY_URL="http://192.168.1.26:8080/display"
+   ```
+
+---
+
+### 3.3 Verifying hardware endpoints by hand
+
+Before running the full TaleTrace session, confirm communication with standard CLI tools:
 
 ```bash
-python -m backend.app.live_session --buttons auto       # default: probe, fall back
-python -m backend.app.live_session --buttons hardware   # never substitute, never probe
-python -m backend.app.live_session --buttons virtual    # never probe, always rehearse
+# 1. Probe the self-describing diagnostic health endpoint
+curl http://192.168.1.26:8080/health
+
+# Expected output:
+# {"device":"button_oled","protocol_version":1,"firmware_version":"1.2.0","ip":"192.168.1.26","port":8080,"uptime_ms":12540,"wifi_rssi":-52,"oled":true}
+
+# 2. Check the raw button states
+curl http://192.168.1.26:8080/buttons
+
+# Expected output:
+# {"btn_momentary":false,"btn_toggle":false,"both_active":false}
+
+# 3. Test sending text to the physical OLED screen
+curl -X POST -H "Content-Type: text/plain" -d "TaleTrace OLED Ready!" http://192.168.1.26:8080/display
+
+# Expected output on terminal: Display updated (21 bytes, 1 pages)
+# Expected on OLED screen: "TaleTrace OLED Ready!" rendered cleanly with automatic word wrapping.
+
+# 4. Fetch a camera frame
+curl -o test_frame.jpg http://192.168.1.200/capture
 ```
 
-`--buttons hardware` is for the case where the probe is wrong — a device that is
-slow to answer on first contact, say. It trusts the wiring, so a genuinely dead
-endpoint then produces a session with no events, which is the correct outcome of
-being told not to second-guess.
+---
 
-### 4.1 Devices dropping mid-session
+### 3.4 Live camera preview and framing calibration
 
-Already handled, and worth knowing so a flaky link is not mistaken for an OCR
-problem:
+To ensure optimal OCR recognition and gesture detection accuracy, use the built-in **Live Camera Preview Tool**:
 
-- `Esp32Camera.frame()` returns `None` on any failure rather than raising, with
-  a 1.5s timeout so a device that has gone away cannot stall the control loop.
-  The loop skips that pass and tries again on the next tick.
-- `Esp32Buttons` reads an unreachable device as "nothing pressed, not
-  reachable", and emits `CAMERA_OFF` / `CAMERA_ON` edges when reachability
-  changes — so the rig announces its own disappearance.
-- The end-of-session summary reports lost frames, because a session that read 4
-  frames out of 600 attempts is a Wi-Fi problem that otherwise presents as a low
-  page count:
-  ```
-    devices         esp32_cam + esp32_buttons
-    frames read     412
-    frames lost     188  (camera unreachable or returned no image)
-  ```
+```bash
+# 1. Start the TaleTrace backend
+python -m uvicorn backend.app.main:app --reload
+
+# 2. Open the camera preview page in your web browser:
+#    Simply double-click or open file:///E:/Projects/TaleTrace/scripts/camera_preview.html in Chrome/Edge/Firefox.
+```
+
+#### Camera Alignment & Calibration Guide
+- **Framing**: Ensure the entire book page is in frame, centered, with minimal border distortion.
+- **Lighting**: Use diffused, even lighting. Avoid glare from overhead bulbs or sharp shadows cast by the reader's hand.
+- **Orientation**: Ensure the page is oriented right-side up relative to the camera sensor.
+- **Refresh Rate**: Use the dropdown in `camera_preview.html` to toggle between **2 fps (Normal)** and **5 fps (Fast)** to check real-time latency and camera focus.
+
+---
+
+### 3.5 Complete colleague hardware rehearsal & testing guide
+
+When performing a physical rehearsal on the rig, follow this step-by-step procedure:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                              REHEARSAL EXECUTION CHECKLIST                             │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                        │
+│  [1] Preflight Check:                                                                  │
+│      $ python scripts/hardware_check.py                                                │
+│      $ python -m backend.app.live_session --check                                      │
+│                                                                                        │
+│  [2] Start Live Session:                                                               │
+│      $ python -m backend.app.live_session                                              │
+│                                                                                        │
+│  [3] Golden Physical Interactions to Rehearse:                                         │
+│                                                                                        │
+│      A. Golden Path 1 (Reading):                                                       │
+│         • Toggle Switch: OFF                                                           │
+│         • Reader points index finger at target sentence and presses Momentary Button   │
+│         • System captures frame burst → Fused detector resolves word →                 │
+│           Reading pointer updates → TTS narrates from pointed sentence.                │
+│                                                                                        │
+│      B. Golden Path 2 (Meaning Mode Lookup):                                           │
+│         • Flip Toggle Switch: ON                                                       │
+│         • System emits MEANING_MODE_ON → Audio narration & ambient audio PAUSE.        │
+│         • Reader points index finger at a difficult word                               │
+│         • System captures burst → Resolves stable word → MEANING_REQUESTED →           │
+│           AI Engine explains word in context → Dispatches explanation to OLED screen.  │
+│         • Reading pointer does NOT advance.                                            │
+│                                                                                        │
+│      C. Golden Path 3 (OLED Pagination & Local Scrolling):                             │
+│         • While Toggle Switch is ON and explanation is displayed on OLED               │
+│         • Reader presses Momentary Button (or presses both buttons)                    │
+│         • ESP32 DevKit locally scrolls to Page 2 of multi-page explanation on OLED.    │
+│         • No backend network request made; reading pointer does NOT advance.           │
+│                                                                                        │
+│      D. Golden Path 4 (Exit Meaning Mode):                                             │
+│         • Flip Toggle Switch: OFF                                                      │
+│         • System emits MEANING_MODE_OFF → OLED clears → Reading session resumes.       │
+│                                                                                        │
+│  [4] Finish Session:                                                                   │
+│      • Press Ctrl-C in the terminal.                                                   │
+│      • Verify summary analytics printed (words read, pages, lookups).                  │
+│      • Open companion website (`python scripts/dev.py`) and verify new session row!    │
+│                                                                                        │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 3.6 Offline dataset recording and replay tooling
+
+For testing gesture stability, partial finger shapes, and lighting conditions offline without needing the physical rig active:
+
+#### Recording a Hardware Session
+Record synchronized camera frames, raw button states, and telemetry to a timestamped dataset folder:
+
+```bash
+# Record 100 frames at 100ms intervals to recordings/rehearsal_01
+python scripts/record_live_dataset.py --output recordings/rehearsal_01 --max-frames 100
+```
+
+This creates:
+- `recordings/rehearsal_01/session_metadata.json` (Hardware configuration & device URLs).
+- `recordings/rehearsal_01/manifest.jsonl` (Timestamped frame-by-frame button levels and frame references).
+- `recordings/rehearsal_01/frames/frame_00000.jpg` ... `frame_00099.jpg`.
+
+#### Replaying a Recorded Dataset
+Replay the recorded session through the 3-tier gesture detector and verification pipeline:
+
+```bash
+# Replay dataset through detector and calculate detection statistics
+python scripts/replay_dataset.py --input recordings/rehearsal_01 --realtime
+```
+
+---
+
+## 4. Gesture stabilization and 3-tier detection architecture
+
+The TaleTrace gesture engine uses a multi-tier fused spatial architecture designed to ensure zero false positives, robust detection of partial and occluded fingers, and frame-rate independent stability:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                              3-TIER GESTURE DETECTION ENGINE                           │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                        │
+│   [ Capture Frame ]                                                                    │
+│          │                                                                             │
+│          ├──► Tier 1: MediaPipe Video Tracking Mode                                    │
+│          │      • Joint segment geometry (MCP → PIP → DIP → TIP)                       │
+│          │      • Collinearity straightness metric (Handedness score stripped)         │
+│          │                                                                             │
+│          ├──► Tier 2: Adaptive Partial-Finger CV Detector                              │
+│          │      • Dual-space color segmentation (HSV + YCrCb)                          │
+│          │      • Non-color gradient edge & shape fallback around tracking prior       │
+│          │      • PCA Principal Axis orientation (all 8 directional angles)            │
+│          │      • Border-contact base vs isolated in-frame convex fingertip analysis   │
+│          │                                                                             │
+│          └──► Tier 3: Temporal Motion Tracker (GestureMotionTracker)                   │
+│                 • Alpha-beta velocity filtering & jitter damping                       │
+│                 • Coasting decay (is_predicted=True, max 2 frames)                     │
+│                                                                                        │
+│   [ Observation Fusion & Hysteresis ] (ObservationFuser)                               │
+│          • Spatial distance agreement (< 3.5% diagonal)                                │
+│          • Angular agreement (< 25° heading difference)                                │
+│          • Fused confidence boost & detector selection inertia                         │
+│                                                                                        │
+│   [ GestureTransaction & Temporal Consensus ] (GestureConsensus)                       │
+│          • Multi-frame burst consensus (≥ 3/5 agreement required)                      │
+│          • Winner vs runner-up separation margin (selection_margin)                    │
+│          • Safe rejection (NO_STABLE_SELECTION) if ambiguous — NEVER GUESS             │
+│                                                                                        │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 4.1 Dual-identity spatial modeling (`PageContext` vs `FrameContext`)
+
+1. **`PageContext` (Stable Reading Geometry)**:
+   - Owns the stable OCR words (`ocr_words: tuple[RecognizedWord, ...]`), page bounding box, and low-frequency background perceptual fingerprint (`page_fingerprint`).
+   - Remains constant as long as the book page does not change.
+2. **`FrameContext` (Per-Frame Interaction Snapshot)**:
+   - Owns the instantaneous camera capture (`image`), frame timestamp, and detected fingertip coordinate.
+3. **`PageGeometryValidator` (Background Change Invariant)**:
+   - Masks out the dynamic interaction / finger region before computing the background hash, ensuring that finger movement across lines does **not** trigger expensive OCR re-runs.
+
+### 4.2 Safe selection invariant
+
+If the user's finger is between two words or moving rapidly, the consensus algorithm enforces `selection_margin` and `selection_ratio`. If the winner does not distinctly outrank the runner-up, TaleTrace produces `SelectionStatus.LOW_CONFIDENCE` (`NO_STABLE_SELECTION`). The system safely remains silent rather than speaking a wrong word.
 
 ---
 
@@ -791,32 +929,43 @@ python -m venv .venv
 pip install -r requirements.txt
 cp .env.example .env
 
-# ── the two commands ─────────────────────────────────────────────────────────
+# ── the two primary commands ────────────────────────────────────────────────
 python -m backend.app.simulated_session               # the reading engine
 python scripts/dev.py                                 # the website: both servers
 
+# ── hardware diagnostics & preflight ────────────────────────────────────────
+python scripts/hardware_check.py                      # comprehensive hardware & subnet gate
+python -m backend.app.live_session --check            # probe hardware endpoints and exit
+# Camera preview: open scripts/camera_preview.html in browser while backend is running
+
 # ── tests ────────────────────────────────────────────────────────────────────
-python -m pytest -q                                   # all 703
-python -m pytest -q tests/test_device_integration.py   # one file
+python -m pytest -q                                   # all 799 backend tests
+python -m pytest -q tests/test_gesture_stabilization.py # stabilization & fusion tests
+python -m pytest -q tests/test_device_integration.py   # hardware device unit tests
 python -m pytest -q -k DeviceDetection                 # one class
 python -m pytest -q -x -vv                             # stop at first failure, verbose
-cd frontend && npm test                                # the website's 7
+cd frontend && npm test                                # the website's 11 tests
 
-# ── sessions ─────────────────────────────────────────────────────────────────
+# ── reading sessions ─────────────────────────────────────────────────────────
 python -m backend.app.simulated_session                          # synthetic, offline
 python -m backend.app.simulated_session pages/ --minutes 15
 python -m backend.app.simulated_session page.jpg --realtime
 python -m backend.app.simulated_session pages/ --offline --limit 3
 
 python -m backend.app.live_session --check                       # probe and exit — run this FIRST
-python -m backend.app.live_session                               # until Ctrl-C
+python -m backend.app.live_session                               # live physical session until Ctrl-C
 python -m backend.app.live_session --seconds 120
 python -m backend.app.live_session --buttons virtual             # real cam, scheduled reader
 python -m backend.app.live_session --buttons hardware            # never substitute
 
+# ── offline dataset capture & replay ────────────────────────────────────────
+python scripts/record_live_dataset.py --output recordings/session_01 --max-frames 100
+python scripts/replay_dataset.py --input recordings/session_01 --realtime
+
 # ── API ──────────────────────────────────────────────────────────────────────
 uvicorn backend.app.main:app --reload                            # /docs for the schema
 curl "http://127.0.0.1:8000/api/analysis?range=week"             # what Analysis draws
+curl "http://127.0.0.1:8000/api/debug/camera"                    # proxy camera frame
 
 # ── the website ──────────────────────────────────────────────────────────────
 python scripts/dev.py                                            # both servers, one Ctrl-C
@@ -830,8 +979,8 @@ python scripts/seed_history.py --list                            # what is in th
 python scripts/seed_history.py                                   # refresh seeded rows
 python scripts/seed_history.py --reset                           # wipe all, then seed
 
-# ── verification ─────────────────────────────────────────────────────────────
-python -m scripts.verify_all
+# ── verification & pipeline release gates ────────────────────────────────────
+python scripts/verify_all.py
 python -m scripts.verify_all photo.jpg --offline
 python -m scripts.verify_all photo.jpg --hardware --keep-going
 
@@ -846,7 +995,9 @@ python -m scripts.stress_session pages/ --no-audio --json stress.json
 
 python -m scripts.synthetic_page --pages 40
 
-# ── hardware, by hand ────────────────────────────────────────────────────────
+# ── hardware probing by hand ────────────────────────────────────────────────
+curl http://<devkit-ip>:8080/health                              # self-describing diagnostic JSON
+curl http://<devkit-ip>:8080/buttons                             # raw button levels
+curl -X POST -H "Content-Type: text/plain" -d "Hello OLED" http://<devkit-ip>:8080/display
 curl -o frame.jpg http://<cam-ip>/capture
-curl http://<devkit-ip>:8080/buttons
 ```

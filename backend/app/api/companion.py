@@ -722,3 +722,26 @@ async def test_voice(voice_id: str) -> Response:
         
     return Response(content=response.audio, media_type=response.content_type)
 
+
+@router.get("/debug/camera")
+async def debug_camera() -> Response:
+    """Proxy a live JPEG frame from the ESP32-CAM for calibration and camera preview."""
+    from backend.app.modules.image_receiver.esp32_camera import Esp32Camera
+
+    cam = Esp32Camera()
+    if not cam.configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ESP32-CAM is not configured (set ESP32_CAM_CAPTURE_URL in .env)",
+        )
+
+    raw_frame = cam.frame()
+    if raw_frame is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to capture frame from ESP32-CAM (camera unreachable or timed out)",
+        )
+
+    return Response(content=raw_frame, media_type="image/jpeg")
+
+
