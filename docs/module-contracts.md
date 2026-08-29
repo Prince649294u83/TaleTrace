@@ -32,83 +32,73 @@ are future dependencies.
 
 ## `preprocessing`
 
-**Role:** Boundary for image preparation before OCR.
+**Role:** Image enhancement and deterministic text normalization.
 
-**Inputs:** A frame reference and preparation options defined by a future
-preprocessing contract.
+**Inputs:** Raw frame arrays / BGR images, and recognized raw OCR token lists.
 
-**Outputs:** A provider-neutral prepared-image reference consumable by OCR.
+**Outputs:** Enhanced BGR frame for OCR/Gesture, and normalized reading text via idempotent transformation rules (`normalize_reading_text`).
 
-**Depends on:** image/frame contracts and the future image-processing provider.
-No preprocessing behavior is specified here.
+**Depends on:** OpenCV, NumPy, and narrow regex patterns. Preserves raw token indices and coordinates without mutation.
 
 ## `ocr`
 
-**Role:** OCR boundary that normalizes recognized content.
+**Role:** OCR extraction, spatial drop-cap detection, and dual-path token modeling.
 
-**Inputs:** `OcrProcessRequest`, containing `ProcessedImage` and the fixed
-`DOCUMENT_TEXT_DETECTION` operation contract.
+**Inputs:** `ProcessedImage` / JPEG bytes via `Google Vision` (or `OCR.Space` prototype).
 
-**Outputs:** `OcrProcessResponse` containing a status and `OCRPage` values;
-pages contain paragraphs, words, confidence, and optional bounding boxes.
+**Outputs:** `RawOCRToken` (immutable bounding boxes for gesture mapping) and `NormalizedToken` / `ReconstructedReadingPage` for semantic reading, OLED text, and TTS queues.
 
-**Depends on:** prepared-image contracts, shared OCR domain models, and
-`OcrParserInterface`/`OcrProcessorInterface`. A future provider may be placed
-behind these interfaces.
+**Depends on:** Google Vision API, cached vision responses, and `PageGeometryValidator` for spatial consistency.
+
+## `merge_memory`
+
+**Role:** Multi-frame page accumulation, same-page overlap detection, and immutable page history.
+
+**Inputs:** Polled OCR text frames with line bounding boxes and page indices (`apply_frame`).
+
+**Outputs:** Consolidated `Page` objects, monotonic `source_version`, and structured `ContentMap` with reading pointers.
+
+**Depends on:** `GroqReconstructor` (via `GROQ_API_KEY_2`) or deterministic offline line-stitching fallback.
 
 ## `reading_engine`
 
-**Role:** Reading-session lifecycle and current reading-context boundary.
+**Role:** Reading-session lifecycle, runtime coordination, and device control loop.
 
-**Inputs:** Session ID, optional timestamps, page number, `OCRPage`, or selected
-word text, as defined by `ReadingEngineInterface`.
+**Inputs:** `DeviceLoop` hardware ticks, `SessionEvent` triggers (`READING_UPDATE_REQUESTED`, `MEANING_MODE_ON/OFF`), and reading pointer advancements.
 
-**Outputs:** `Session`, `ReadingState`, current `OCRPage`, paragraph text,
-session summary, or no value for recording operations.
+**Outputs:** Real-time `ReadingSessionState`, `MeaningLookupResult` for OLED display, and finalized `SessionAnalytics`.
 
-**Depends on:** shared session, reading-state, and OCR contracts. It may later
-depend on database persistence but does not require a concrete store at the
-interface boundary.
+**Depends on:** `MergeMemory`, `ReadingSpeedService`, `FocusAnalyticsEngine`, and `PlaybackEngine`.
 
 ## `gesture_engine`
 
-**Role:** Hand-gesture and OCR-selection boundary.
+**Role:** Real-time fingertip localization, multi-frame consensus, and word selection.
 
-**Inputs:** `GestureDetectionRequest` with a shared `Frame`; or
-`OcrMappingRequest` with a normalized `FingerPoint` and OCR pages.
+**Inputs:** Camera frames (BGR array) and active `PageContext` / `FrameContext`.
 
-**Outputs:** `GesturePlaceholderResponse` with operation and pending status,
-optionally carrying a `Gesture` or selected `OCRWord` once implemented.
+**Outputs:** `FingerObservation`, `SelectionResult` with bounding box containment scores, and `GestureTransaction` lifecycle states.
 
-**Depends on:** shared frame, gesture, and OCR contracts. MediaPipe Hands is a
-reserved future provider dependency and is not part of the current contract.
+**Depends on:** MediaPipe Hands (Tier 1) and OpenCV adaptive contour fallback (Tier 2).
 
 ## `ai_engine`
 
-**Role:** Provider-neutral boundary for reader assistance capabilities.
+**Role:** Meaning Mode dictionary explanations and end-of-session review generation.
 
-**Inputs:** `AiInput` containing optional text, content reference, and string
-metadata.
+**Inputs:** Target word, sentence context, and reader lookup history.
 
-**Outputs:** `AiPlaceholderResponse` with status, capability name, and a
-placeholder message. The existing explanation route uses the compatible
-`AiExplainRequest` and `AiExplainResponse` types.
+**Outputs:** Real-time OLED definition string ($18\text{ chars/line}$), TTS audio text, and JSON review payload (quizzes & flashcards).
 
-**Depends on:** Pydantic and shared content references. Interfaces cover Prompt
-Builder, Explanation Engine, Adaptive Reading, Novel Mode, Image Decision,
-Summary Generator, Flashcard Generator, and Quiz Generator. No LLM or provider
-SDK is a current dependency.
+**Depends on:** Groq API (via `GROQ_API_KEY_1`, `fast_model`, and `chat_model`).
 
 ## `audio_engine`
 
-**Role:** Boundary for future text-to-speech and playback delivery.
+**Role:** Dual-layer audio pipeline (neural TTS narration + ambient atmospheric soundscapes).
 
-**Inputs:** Future text, voice, and playback request contracts.
+**Inputs:** Sentence spans from `ReadingEngine`, scene triggers from `SceneController`, and reader voice preferences.
 
-**Outputs:** Future audio reference and playback status contracts.
+**Outputs:** Streamed speech audio (`EdgeTTSProvider` / `LocalAudioSink`), ambient audio playback (`LocalAmbientProvider`), and automatic audio ducking on Meaning Mode activation.
 
-**Depends on:** reading/AI text contracts, API envelopes, and a future audio
-provider. No audio provider behavior is specified here.
+**Depends on:** `edge-tts`, `pygame.mixer`, and local ambient MP3 assets (`assets/audio/`).
 
 ## `database`
 

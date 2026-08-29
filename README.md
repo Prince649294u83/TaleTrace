@@ -847,12 +847,14 @@ backend/app/
     image_receiver/        Esp32Camera, Esp32Buttons, VirtualCamera,
                            VirtualButtons, ScriptedButtons, and the protocols
                            they satisfy
-    preprocessing/         frame enhancement before OCR
-    ocr/                   Google Vision provider, parser, cache, replay adapter
+    preprocessing/         frame enhancement before OCR, deterministic text normalizer
+    ocr/                   Google Vision provider, parser, cache, replay adapter,
+                           reconstruction models, spatial drop-cap detection
     merge_memory/          reconstruction, same-page detection, pointer sync
-    gesture_engine/        fingertip → word
+    gesture_engine/        fingertip → word, multi-frame consensus, transaction safety
     reading_engine/        DeviceLoop, runtime, the session state machine
-    audio_engine/          playback state machine, speech providers, queue
+    audio_engine/          playback state machine, speech providers, queue,
+                           scene controller, ambient background provider & audio ducking
     ai_engine/             Meaning Mode, explanations, session review
     reading_speed/         calibration, baselines, predictions
     focus_analytics/       Reading Focus Analysis Engine
@@ -863,9 +865,9 @@ backend/app/
 frontend/                  the website (React + Vite)
   src/services/api.js      the only file that talks to the backend
   src/services/mockBackend.js  what is still faked: accounts, quizzes, flashcards
-scripts/                   the harnesses in §5, plus dev.py and seed_history.py
-tests/                     703 tests
-docs/                      architecture, module contracts, verification
+scripts/                   the harnesses in §5, plus dev.py, seed_history.py, test_synthetic_pipeline.py
+tests/                     822 tests (pytest) + 11 tests (vitest)
+docs/                      architecture, module contracts, hardware testing guide, verification
 taletrace.db               the reading history — committed on purpose (§2.4)
 .taletrace_cache/          OCR responses, generated pages, database backups
                            (derived; deletable)
@@ -941,12 +943,16 @@ python -m backend.app.live_session --check            # probe hardware endpoints
 # Camera preview: open scripts/camera_preview.html in browser while backend is running
 
 # ── tests ────────────────────────────────────────────────────────────────────
-python -m pytest -q                                   # all 799 backend tests
+python -m pytest -q                                   # all 822 backend tests
+python -m pytest -q tests/test_device_integration.py tests/test_virtual_devices.py # 124 hardware tests
+python -m pytest -q tests/test_ocr_reconstruction_safety.py # 11 dual-path safety tests
 python -m pytest -q tests/test_gesture_stabilization.py # stabilization & fusion tests
-python -m pytest -q tests/test_device_integration.py   # hardware device unit tests
 python -m pytest -q -k DeviceDetection                 # one class
 python -m pytest -q -x -vv                             # stop at first failure, verbose
-cd frontend && npm test                                # the website's 11 tests
+cd frontend && npm test                                # the website's 11 vitest tests
+
+# ── synthetic page generation & merge validation ───────────────────────────
+python scripts/test_synthetic_pipeline.py             # generate 4 pages, test merge & reading engine
 
 # ── reading sessions ─────────────────────────────────────────────────────────
 python -m backend.app.simulated_session                          # synthetic, offline

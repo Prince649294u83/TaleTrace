@@ -1,0 +1,2730 @@
+[
+  {
+    "text": "THE",
+    "bbox": [
+      358,
+      169,
+      408,
+      188
+    ],
+    "confidence": 1.0,
+    "line_index": 0
+  },
+  {
+    "text": "PSYCHOLOGY",
+    "bbox": [
+      410,
+      167,
+      572,
+      187
+    ],
+    "confidence": 1.0,
+    "line_index": 0
+  },
+  {
+    "text": "OF",
+    "bbox": [
+      574,
+      166,
+      615,
+      185
+    ],
+    "confidence": 1.0,
+    "line_index": 0
+  },
+  {
+    "text": "MONEY",
+    "bbox": [
+      617,
+      165,
+      701,
+      185
+    ],
+    "confidence": 1.0,
+    "line_index": 0
+  },
+  {
+    "text": "What",
+    "bbox": [
+      265,
+      230,
+      325,
+      260
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "inflation",
+    "bbox": [
+      329,
+      230,
+      430,
+      260
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "did",
+    "bbox": [
+      434,
+      230,
+      475,
+      260
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "to",
+    "bbox": [
+      479,
+      230,
+      505,
+      260
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "prices",
+    "bbox": [
+      509,
+      230,
+      584,
+      260
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "in",
+    "bbox": [
+      587,
+      230,
+      613,
+      260
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "your",
+    "bbox": [
+      617,
+      230,
+      673,
+      260
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "teens",
+    "bbox": [
+      677,
+      230,
+      744,
+      260
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "and",
+    "bbox": [
+      749,
+      230,
+      798,
+      260
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "20s",
+    "bbox": [
+      801,
+      230,
+      846,
+      260
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "-",
+    "bbox": [
+      381,
+      267,
+      412,
+      288
+    ],
+    "confidence": 1.0,
+    "line_index": 2
+  },
+  {
+    "text": "Born",
+    "bbox": [
+      415,
+      267,
+      468,
+      288
+    ],
+    "confidence": 1.0,
+    "line_index": 2
+  },
+  {
+    "text": "1960",
+    "bbox": [
+      470,
+      267,
+      533,
+      288
+    ],
+    "confidence": 1.0,
+    "line_index": 2
+  },
+  {
+    "text": "Born",
+    "bbox": [
+      536,
+      267,
+      625,
+      288
+    ],
+    "confidence": 1.0,
+    "line_index": 2
+  },
+  {
+    "text": "1990",
+    "bbox": [
+      628,
+      267,
+      682,
+      288
+    ],
+    "confidence": 1.0,
+    "line_index": 2
+  },
+  {
+    "text": "Rebased",
+    "bbox": [
+      172,
+      531,
+      198,
+      619
+    ],
+    "confidence": 1.0,
+    "line_index": 3
+  },
+  {
+    "text": "to",
+    "bbox": [
+      172,
+      506,
+      197,
+      528
+    ],
+    "confidence": 1.0,
+    "line_index": 3
+  },
+  {
+    "text": "1",
+    "bbox": [
+      172,
+      490,
+      197,
+      503
+    ],
+    "confidence": 1.0,
+    "line_index": 3
+  },
+  {
+    "text": "at",
+    "bbox": [
+      172,
+      465,
+      197,
+      487
+    ],
+    "confidence": 1.0,
+    "line_index": 3
+  },
+  {
+    "text": "age",
+    "bbox": [
+      172,
+      422,
+      197,
+      463
+    ],
+    "confidence": 1.0,
+    "line_index": 3
+  },
+  {
+    "text": "13",
+    "bbox": [
+      172,
+      393,
+      198,
+      419
+    ],
+    "confidence": 1.0,
+    "line_index": 3
+  },
+  {
+    "text": "0",
+    "bbox": [
+      205,
+      700,
+      219,
+      719
+    ],
+    "confidence": 1.0,
+    "line_index": 4
+  },
+  {
+    "text": "13",
+    "bbox": [
+      221,
+      730,
+      249,
+      751
+    ],
+    "confidence": 1.0,
+    "line_index": 5
+  },
+  {
+    "text": "18",
+    "bbox": [
+      426,
+      730,
+      454,
+      751
+    ],
+    "confidence": 1.0,
+    "line_index": 6
+  },
+  {
+    "text": "23",
+    "bbox": [
+      633,
+      728,
+      661,
+      751
+    ],
+    "confidence": 1.0,
+    "line_index": 7
+  },
+  {
+    "text": "28",
+    "bbox": [
+      840,
+      730,
+      868,
+      751
+    ],
+    "confidence": 1.0,
+    "line_index": 8
+  },
+  {
+    "text": "Age",
+    "bbox": [
+      505,
+      749,
+      549,
+      772
+    ],
+    "confidence": 1.0,
+    "line_index": 9
+  },
+  {
+    "text": "America's",
+    "bbox": [
+      186,
+      828,
+      298,
+      861
+    ],
+    "confidence": 1.0,
+    "line_index": 10
+  },
+  {
+    "text": "nationwide",
+    "bbox": [
+      302,
+      828,
+      434,
+      860
+    ],
+    "confidence": 1.0,
+    "line_index": 10
+  },
+  {
+    "text": "unemployment",
+    "bbox": [
+      438,
+      828,
+      618,
+      860
+    ],
+    "confidence": 1.0,
+    "line_index": 10
+  },
+  {
+    "text": "in",
+    "bbox": [
+      622,
+      828,
+      650,
+      860
+    ],
+    "confidence": 1.0,
+    "line_index": 10
+  },
+  {
+    "text": "November",
+    "bbox": [
+      654,
+      828,
+      782,
+      860
+    ],
+    "confidence": 1.0,
+    "line_index": 10
+  },
+  {
+    "text": "2009",
+    "bbox": [
+      786,
+      828,
+      846,
+      860
+    ],
+    "confidence": 1.0,
+    "line_index": 10
+  },
+  {
+    "text": "was",
+    "bbox": [
+      850,
+      828,
+      898,
+      861
+    ],
+    "confidence": 1.0,
+    "line_index": 10
+  },
+  {
+    "text": "around",
+    "bbox": [
+      163,
+      867,
+      242,
+      900
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "10",
+    "bbox": [
+      246,
+      867,
+      300,
+      900
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "%.",
+    "bbox": [
+      246,
+      867,
+      300,
+      900
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "But",
+    "bbox": [
+      303,
+      867,
+      348,
+      900
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "the",
+    "bbox": [
+      353,
+      867,
+      394,
+      900
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "unemployment",
+    "bbox": [
+      398,
+      867,
+      580,
+      900
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "rate",
+    "bbox": [
+      584,
+      867,
+      634,
+      900
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "for",
+    "bbox": [
+      637,
+      867,
+      678,
+      900
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "African",
+    "bbox": [
+      683,
+      867,
+      778,
+      900
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "American",
+    "bbox": [
+      782,
+      867,
+      898,
+      900
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "males",
+    "bbox": [
+      160,
+      907,
+      226,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "age",
+    "bbox": [
+      230,
+      907,
+      271,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "16",
+    "bbox": [
+      276,
+      907,
+      301,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "to",
+    "bbox": [
+      304,
+      907,
+      333,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "1g",
+    "bbox": [
+      337,
+      907,
+      366,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "without",
+    "bbox": [
+      370,
+      907,
+      465,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "a",
+    "bbox": [
+      469,
+      907,
+      485,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "high",
+    "bbox": [
+      490,
+      907,
+      548,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "school",
+    "bbox": [
+      552,
+      907,
+      630,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "diploma",
+    "bbox": [
+      634,
+      907,
+      737,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "was",
+    "bbox": [
+      742,
+      907,
+      792,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "49",
+    "bbox": [
+      795,
+      907,
+      853,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "%.",
+    "bbox": [
+      795,
+      907,
+      853,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "For",
+    "bbox": [
+      857,
+      907,
+      902,
+      940
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "Caucasian",
+    "bbox": [
+      160,
+      947,
+      274,
+      982
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "females",
+    "bbox": [
+      279,
+      947,
+      364,
+      981
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "over",
+    "bbox": [
+      368,
+      947,
+      419,
+      981
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "age",
+    "bbox": [
+      424,
+      947,
+      466,
+      981
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "45",
+    "bbox": [
+      470,
+      947,
+      496,
+      981
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "with",
+    "bbox": [
+      500,
+      947,
+      555,
+      981
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "a",
+    "bbox": [
+      560,
+      947,
+      577,
+      981
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "college",
+    "bbox": [
+      581,
+      947,
+      666,
+      981
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "degree",
+    "bbox": [
+      670,
+      947,
+      755,
+      981
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": ",",
+    "bbox": [
+      670,
+      947,
+      755,
+      981
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "it",
+    "bbox": [
+      759,
+      947,
+      780,
+      981
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "was",
+    "bbox": [
+      785,
+      947,
+      832,
+      981
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "4",
+    "bbox": [
+      836,
+      947,
+      882,
+      982
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "%.",
+    "bbox": [
+      836,
+      947,
+      882,
+      982
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "Local",
+    "bbox": [
+      191,
+      986,
+      257,
+      1021
+    ],
+    "confidence": 1.0,
+    "line_index": 14
+  },
+  {
+    "text": "stock",
+    "bbox": [
+      261,
+      986,
+      322,
+      1021
+    ],
+    "confidence": 1.0,
+    "line_index": 14
+  },
+  {
+    "text": "markets",
+    "bbox": [
+      327,
+      986,
+      423,
+      1021
+    ],
+    "confidence": 1.0,
+    "line_index": 14
+  },
+  {
+    "text": "in",
+    "bbox": [
+      427,
+      986,
+      458,
+      1021
+    ],
+    "confidence": 1.0,
+    "line_index": 14
+  },
+  {
+    "text": "Germany",
+    "bbox": [
+      462,
+      986,
+      576,
+      1021
+    ],
+    "confidence": 1.0,
+    "line_index": 14
+  },
+  {
+    "text": "and",
+    "bbox": [
+      580,
+      986,
+      628,
+      1021
+    ],
+    "confidence": 1.0,
+    "line_index": 14
+  },
+  {
+    "text": "Japan",
+    "bbox": [
+      633,
+      986,
+      707,
+      1021
+    ],
+    "confidence": 1.0,
+    "line_index": 14
+  },
+  {
+    "text": "were",
+    "bbox": [
+      712,
+      986,
+      773,
+      1021
+    ],
+    "confidence": 1.0,
+    "line_index": 14
+  },
+  {
+    "text": "wiped",
+    "bbox": [
+      777,
+      986,
+      856,
+      1021
+    ],
+    "confidence": 1.0,
+    "line_index": 14
+  },
+  {
+    "text": "out",
+    "bbox": [
+      860,
+      986,
+      904,
+      1021
+    ],
+    "confidence": 1.0,
+    "line_index": 14
+  },
+  {
+    "text": "during",
+    "bbox": [
+      163,
+      1023,
+      236,
+      1058
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "World",
+    "bbox": [
+      239,
+      1024,
+      316,
+      1059
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "War",
+    "bbox": [
+      320,
+      1024,
+      376,
+      1058
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "II",
+    "bbox": [
+      379,
+      1025,
+      413,
+      1059
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": ".",
+    "bbox": [
+      379,
+      1025,
+      413,
+      1059
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "Entire",
+    "bbox": [
+      418,
+      1025,
+      495,
+      1060
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "regions",
+    "bbox": [
+      498,
+      1026,
+      588,
+      1061
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "were",
+    "bbox": [
+      592,
+      1027,
+      656,
+      1062
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "bombed",
+    "bbox": [
+      660,
+      1027,
+      762,
+      1062
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "out",
+    "bbox": [
+      766,
+      1028,
+      817,
+      1062
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": ".",
+    "bbox": [
+      766,
+      1028,
+      817,
+      1062
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "At",
+    "bbox": [
+      821,
+      1029,
+      855,
+      1063
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "the",
+    "bbox": [
+      859,
+      1029,
+      904,
+      1064
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "end",
+    "bbox": [
+      160,
+      1062,
+      204,
+      1098
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "of",
+    "bbox": [
+      208,
+      1062,
+      239,
+      1097
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "the",
+    "bbox": [
+      243,
+      1063,
+      283,
+      1098
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "war",
+    "bbox": [
+      287,
+      1063,
+      340,
+      1099
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "German",
+    "bbox": [
+      344,
+      1064,
+      441,
+      1100
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "farms",
+    "bbox": [
+      445,
+      1065,
+      520,
+      1101
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "only",
+    "bbox": [
+      523,
+      1066,
+      580,
+      1102
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "produced",
+    "bbox": [
+      585,
+      1067,
+      704,
+      1103
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "enough",
+    "bbox": [
+      707,
+      1068,
+      804,
+      1104
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "food",
+    "bbox": [
+      808,
+      1070,
+      870,
+      1106
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "to",
+    "bbox": [
+      873,
+      1070,
+      905,
+      1106
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "provide",
+    "bbox": [
+      162,
+      1101,
+      241,
+      1138
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "the",
+    "bbox": [
+      245,
+      1102,
+      281,
+      1138
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "country's",
+    "bbox": [
+      285,
+      1103,
+      391,
+      1140
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "citizens",
+    "bbox": [
+      394,
+      1105,
+      486,
+      1142
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "with",
+    "bbox": [
+      490,
+      1106,
+      543,
+      1142
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "1,000",
+    "bbox": [
+      547,
+      1107,
+      618,
+      1143
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "calories",
+    "bbox": [
+      622,
+      1108,
+      714,
+      1145
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "a",
+    "bbox": [
+      718,
+      1110,
+      736,
+      1145
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "day",
+    "bbox": [
+      740,
+      1110,
+      789,
+      1146
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": ".",
+    "bbox": [
+      740,
+      1110,
+      789,
+      1146
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "Compare",
+    "bbox": [
+      792,
+      1111,
+      907,
+      1148
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "that",
+    "bbox": [
+      163,
+      1140,
+      204,
+      1182
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "to",
+    "bbox": [
+      209,
+      1140,
+      229,
+      1181
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "the",
+    "bbox": [
+      235,
+      1140,
+      271,
+      1181
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "U.S",
+    "bbox": [
+      276,
+      1140,
+      338,
+      1181
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": ".,",
+    "bbox": [
+      276,
+      1140,
+      338,
+      1181
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "where",
+    "bbox": [
+      342,
+      1140,
+      403,
+      1181
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "the",
+    "bbox": [
+      409,
+      1140,
+      450,
+      1181
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "stock",
+    "bbox": [
+      455,
+      1140,
+      517,
+      1181
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "market",
+    "bbox": [
+      522,
+      1140,
+      609,
+      1181
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "more",
+    "bbox": [
+      614,
+      1140,
+      675,
+      1181
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "than",
+    "bbox": [
+      681,
+      1140,
+      737,
+      1181
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "doubled",
+    "bbox": [
+      742,
+      1140,
+      839,
+      1181
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "from",
+    "bbox": [
+      845,
+      1140,
+      907,
+      1182
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "1941",
+    "bbox": [
+      160,
+      1180,
+      205,
+      1217
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "through",
+    "bbox": [
+      208,
+      1181,
+      296,
+      1218
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "the",
+    "bbox": [
+      300,
+      1183,
+      340,
+      1219
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "end",
+    "bbox": [
+      343,
+      1184,
+      392,
+      1220
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "of",
+    "bbox": [
+      396,
+      1186,
+      423,
+      1222
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "1945",
+    "bbox": [
+      427,
+      1186,
+      485,
+      1222
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": ",",
+    "bbox": [
+      427,
+      1186,
+      485,
+      1222
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "and",
+    "bbox": [
+      488,
+      1188,
+      533,
+      1224
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "the",
+    "bbox": [
+      536,
+      1189,
+      581,
+      1225
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "economy",
+    "bbox": [
+      584,
+      1190,
+      694,
+      1228
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "was",
+    "bbox": [
+      698,
+      1193,
+      747,
+      1229
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "the",
+    "bbox": [
+      750,
+      1195,
+      790,
+      1231
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "strongest",
+    "bbox": [
+      794,
+      1196,
+      912,
+      1235
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "it",
+    "bbox": [
+      160,
+      1216,
+      181,
+      1248
+    ],
+    "confidence": 1.0,
+    "line_index": 20
+  },
+  {
+    "text": "had",
+    "bbox": [
+      183,
+      1217,
+      227,
+      1250
+    ],
+    "confidence": 1.0,
+    "line_index": 20
+  },
+  {
+    "text": "been",
+    "bbox": [
+      229,
+      1219,
+      281,
+      1252
+    ],
+    "confidence": 1.0,
+    "line_index": 20
+  },
+  {
+    "text": "in",
+    "bbox": [
+      283,
+      1221,
+      311,
+      1253
+    ],
+    "confidence": 1.0,
+    "line_index": 20
+  },
+  {
+    "text": "almost",
+    "bbox": [
+      314,
+      1222,
+      393,
+      1256
+    ],
+    "confidence": 1.0,
+    "line_index": 20
+  },
+  {
+    "text": "two",
+    "bbox": [
+      396,
+      1226,
+      444,
+      1259
+    ],
+    "confidence": 1.0,
+    "line_index": 20
+  },
+  {
+    "text": "decades",
+    "bbox": [
+      446,
+      1228,
+      555,
+      1264
+    ],
+    "confidence": 1.0,
+    "line_index": 20
+  },
+  {
+    "text": ".",
+    "bbox": [
+      446,
+      1228,
+      555,
+      1264
+    ],
+    "confidence": 1.0,
+    "line_index": 20
+  },
+  {
+    "text": "No",
+    "bbox": [
+      189,
+      1255,
+      226,
+      1298
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "one",
+    "bbox": [
+      230,
+      1257,
+      267,
+      1299
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "should",
+    "bbox": [
+      271,
+      1258,
+      349,
+      1302
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "expect",
+    "bbox": [
+      353,
+      1261,
+      431,
+      1305
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "members",
+    "bbox": [
+      435,
+      1263,
+      544,
+      1308
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "of",
+    "bbox": [
+      548,
+      1267,
+      575,
+      1309
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "these",
+    "bbox": [
+      579,
+      1268,
+      647,
+      1311
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "groups",
+    "bbox": [
+      650,
+      1271,
+      733,
+      1315
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "to",
+    "bbox": [
+      738,
+      1274,
+      770,
+      1316
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "go",
+    "bbox": [
+      773,
+      1275,
+      805,
+      1317
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "through",
+    "bbox": [
+      809,
+      1276,
+      912,
+      1321
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "the",
+    "bbox": [
+      164,
+      1294,
+      197,
+      1337
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "rest",
+    "bbox": [
+      200,
+      1296,
+      244,
+      1340
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "of",
+    "bbox": [
+      248,
+      1298,
+      271,
+      1341
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "their",
+    "bbox": [
+      274,
+      1299,
+      328,
+      1343
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "lives",
+    "bbox": [
+      331,
+      1301,
+      380,
+      1345
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "thinking",
+    "bbox": [
+      384,
+      1303,
+      491,
+      1349
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "the",
+    "bbox": [
+      494,
+      1307,
+      532,
+      1350
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "same",
+    "bbox": [
+      536,
+      1309,
+      601,
+      1353
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "thing",
+    "bbox": [
+      604,
+      1312,
+      674,
+      1357
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "about",
+    "bbox": [
+      678,
+      1315,
+      753,
+      1360
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "inflation",
+    "bbox": [
+      756,
+      1318,
+      873,
+      1365
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": ".",
+    "bbox": [
+      756,
+      1318,
+      873,
+      1365
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "Or",
+    "bbox": [
+      877,
+      1323,
+      915,
+      1366
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "the",
+    "bbox": [
+      163,
+      1331,
+      196,
+      1374
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": "stock",
+    "bbox": [
+      199,
+      1333,
+      263,
+      1377
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": "market",
+    "bbox": [
+      266,
+      1337,
+      355,
+      1383
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": ".",
+    "bbox": [
+      266,
+      1337,
+      355,
+      1383
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": "Or",
+    "bbox": [
+      358,
+      1342,
+      386,
+      1384
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": "unemployment",
+    "bbox": [
+      388,
+      1343,
+      580,
+      1394
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": ".",
+    "bbox": [
+      388,
+      1343,
+      580,
+      1394
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": "Or",
+    "bbox": [
+      583,
+      1354,
+      621,
+      1397
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": "money",
+    "bbox": [
+      624,
+      1356,
+      708,
+      1401
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": "in",
+    "bbox": [
+      711,
+      1361,
+      744,
+      1404
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": "general",
+    "bbox": [
+      747,
+      1363,
+      851,
+      1410
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": ".",
+    "bbox": [
+      747,
+      1363,
+      851,
+      1410
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": "No",
+    "bbox": [
+      191,
+      1371,
+      225,
+      1415
+    ],
+    "confidence": 1.0,
+    "line_index": 24
+  },
+  {
+    "text": "one",
+    "bbox": [
+      228,
+      1373,
+      267,
+      1417
+    ],
+    "confidence": 1.0,
+    "line_index": 24
+  },
+  {
+    "text": "should",
+    "bbox": [
+      270,
+      1376,
+      346,
+      1422
+    ],
+    "confidence": 1.0,
+    "line_index": 24
+  },
+  {
+    "text": "expect",
+    "bbox": [
+      348,
+      1380,
+      424,
+      1426
+    ],
+    "confidence": 1.0,
+    "line_index": 24
+  },
+  {
+    "text": "them",
+    "bbox": [
+      427,
+      1385,
+      487,
+      1430
+    ],
+    "confidence": 1.0,
+    "line_index": 24
+  },
+  {
+    "text": "to",
+    "bbox": [
+      490,
+      1389,
+      519,
+      1432
+    ],
+    "confidence": 1.0,
+    "line_index": 24
+  },
+  {
+    "text": "respond",
+    "bbox": [
+      521,
+      1391,
+      618,
+      1438
+    ],
+    "confidence": 1.0,
+    "line_index": 24
+  },
+  {
+    "text": "to",
+    "bbox": [
+      621,
+      1396,
+      650,
+      1439
+    ],
+    "confidence": 1.0,
+    "line_index": 24
+  },
+  {
+    "text": "financial",
+    "bbox": [
+      652,
+      1398,
+      759,
+      1446
+    ],
+    "confidence": 1.0,
+    "line_index": 24
+  },
+  {
+    "text": "information",
+    "bbox": [
+      762,
+      1405,
+      915,
+      1456
+    ],
+    "confidence": 1.0,
+    "line_index": 24
+  },
+  {
+    "text": "the",
+    "bbox": [
+      165,
+      1408,
+      201,
+      1456
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "same",
+    "bbox": [
+      204,
+      1410,
+      257,
+      1458
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "way",
+    "bbox": [
+      260,
+      1414,
+      319,
+      1462
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": ".",
+    "bbox": [
+      260,
+      1414,
+      319,
+      1462
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "No",
+    "bbox": [
+      322,
+      1417,
+      353,
+      1464
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "one",
+    "bbox": [
+      356,
+      1419,
+      404,
+      1467
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "should",
+    "bbox": [
+      406,
+      1422,
+      487,
+      1472
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "assume",
+    "bbox": [
+      491,
+      1427,
+      584,
+      1477
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "they",
+    "bbox": [
+      586,
+      1433,
+      645,
+      1481
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "are",
+    "bbox": [
+      648,
+      1437,
+      690,
+      1484
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "influenced",
+    "bbox": [
+      693,
+      1439,
+      830,
+      1492
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "by",
+    "bbox": [
+      833,
+      1448,
+      864,
+      1495
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "the",
+    "bbox": [
+      867,
+      1450,
+      916,
+      1498
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "same",
+    "bbox": [
+      165,
+      1444,
+      223,
+      1478
+    ],
+    "confidence": 1.0,
+    "line_index": 26
+  },
+  {
+    "text": "incentives",
+    "bbox": [
+      223,
+      1452,
+      347,
+      1495
+    ],
+    "confidence": 1.0,
+    "line_index": 26
+  },
+  {
+    "text": ".",
+    "bbox": [
+      223,
+      1452,
+      347,
+      1495
+    ],
+    "confidence": 1.0,
+    "line_index": 26
+  },
+  {
+    "text": "16",
+    "bbox": [
+      507,
+      1572,
+      540,
+      1595
+    ],
+    "confidence": 1.0,
+    "line_index": 27
+  },
+  {
+    "text": "No",
+    "bbox": [
+      1135,
+      277,
+      1169,
+      303
+    ],
+    "confidence": 1.0,
+    "line_index": 28
+  },
+  {
+    "text": "on",
+    "bbox": [
+      1173,
+      277,
+      1198,
+      303
+    ],
+    "confidence": 1.0,
+    "line_index": 28
+  },
+  {
+    "text": "No",
+    "bbox": [
+      1137,
+      312,
+      1174,
+      338
+    ],
+    "confidence": 1.0,
+    "line_index": 29
+  },
+  {
+    "text": "or",
+    "bbox": [
+      1178,
+      312,
+      1198,
+      338
+    ],
+    "confidence": 1.0,
+    "line_index": 29
+  },
+  {
+    "text": "worth",
+    "bbox": [
+      1111,
+      346,
+      1177,
+      370
+    ],
+    "confidence": 1.0,
+    "line_index": 30
+  },
+  {
+    "text": "it",
+    "bbox": [
+      1180,
+      347,
+      1197,
+      370
+    ],
+    "confidence": 1.0,
+    "line_index": 30
+  },
+  {
+    "text": "forward",
+    "bbox": [
+      1111,
+      375,
+      1196,
+      404
+    ],
+    "confidence": 1.0,
+    "line_index": 31
+  },
+  {
+    "text": "Their",
+    "bbox": [
+      1137,
+      411,
+      1198,
+      435
+    ],
+    "confidence": 1.0,
+    "line_index": 32
+  },
+  {
+    "text": "that's",
+    "bbox": [
+      1114,
+      446,
+      1177,
+      470
+    ],
+    "confidence": 1.0,
+    "line_index": 33
+  },
+  {
+    "text": "ti",
+    "bbox": [
+      1180,
+      446,
+      1198,
+      469
+    ],
+    "confidence": 1.0,
+    "line_index": 33
+  },
+  {
+    "text": "thinks",
+    "bbox": [
+      1116,
+      481,
+      1188,
+      505
+    ],
+    "confidence": 1.0,
+    "line_index": 34
+  },
+  {
+    "text": "i",
+    "bbox": [
+      1191,
+      481,
+      1198,
+      505
+    ],
+    "confidence": 1.0,
+    "line_index": 34
+  },
+  {
+    "text": "A",
+    "bbox": [
+      1144,
+      514,
+      1167,
+      540
+    ],
+    "confidence": 1.0,
+    "line_index": 35
+  },
+  {
+    "text": "fer",
+    "bbox": [
+      1170,
+      514,
+      1198,
+      540
+    ],
+    "confidence": 1.0,
+    "line_index": 35
+  },
+  {
+    "text": "conditi",
+    "bbox": [
+      1118,
+      551,
+      1197,
+      575
+    ],
+    "confidence": 1.0,
+    "line_index": 36
+  },
+  {
+    "text": "manuf",
+    "bbox": [
+      1121,
+      586,
+      1198,
+      612
+    ],
+    "confidence": 1.0,
+    "line_index": 37
+  },
+  {
+    "text": "rightly",
+    "bbox": [
+      1123,
+      621,
+      1197,
+      654
+    ],
+    "confidence": 1.0,
+    "line_index": 38
+  },
+  {
+    "text": "the",
+    "bbox": [
+      1123,
+      658,
+      1164,
+      684
+    ],
+    "confidence": 1.0,
+    "line_index": 39
+  },
+  {
+    "text": "ne",
+    "bbox": [
+      1167,
+      658,
+      1198,
+      684
+    ],
+    "confidence": 1.0,
+    "line_index": 39
+  },
+  {
+    "text": "section",
+    "bbox": [
+      1125,
+      695,
+      1197,
+      721
+    ],
+    "confidence": 1.0,
+    "line_index": 40
+  },
+  {
+    "text": "M",
+    "bbox": [
+      1172,
+      767,
+      1198,
+      790
+    ],
+    "confidence": 1.0,
+    "line_index": 41
+  },
+  {
+    "text": "sh",
+    "bbox": [
+      1174,
+      805,
+      1197,
+      826
+    ],
+    "confidence": 1.0,
+    "line_index": 42
+  },
+  {
+    "text": "W",
+    "bbox": [
+      1177,
+      842,
+      1198,
+      858
+    ],
+    "confidence": 1.0,
+    "line_index": 43
+  },
+  {
+    "text": "li",
+    "bbox": [
+      1181,
+      940,
+      1197,
+      961
+    ],
+    "confidence": 1.0,
+    "line_index": 44
+  },
+  {
+    "text": "a",
+    "bbox": [
+      1186,
+      981,
+      1198,
+      995
+    ],
+    "confidence": 1.0,
+    "line_index": 45
+  },
+  {
+    "text": "a",
+    "bbox": [
+      1188,
+      1016,
+      1197,
+      1030
+    ],
+    "confidence": 1.0,
+    "line_index": 46
+  },
+  {
+    "text": "fierc",
+    "bbox": [
+      1151,
+      1347,
+      1198,
+      1373
+    ],
+    "confidence": 1.0,
+    "line_index": 47
+  },
+  {
+    "text": "exal",
+    "bbox": [
+      1153,
+      1395,
+      1197,
+      1414
+    ],
+    "confidence": 1.0,
+    "line_index": 48
+  },
+  {
+    "text": "viev",
+    "bbox": [
+      1153,
+      1430,
+      1197,
+      1454
+    ],
+    "confidence": 1.0,
+    "line_index": 49
+  },
+  {
+    "text": "blac",
+    "bbox": [
+      1153,
+      1467,
+      1197,
+      1495
+    ],
+    "confidence": 1.0,
+    "line_index": 50
+  }
+]

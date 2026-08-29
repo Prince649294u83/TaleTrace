@@ -1,0 +1,166 @@
+{
+  "corpus_version": "6.0",
+  "book_title": "The Psychology of Money",
+  "author": "Morgan Housel",
+  "source_directory": "C:\\Users\\dell\\OneDrive\\Desktop\\TaleTrace test",
+  "coordinate_space": {
+    "standard_width": 1200,
+    "standard_height": 1600,
+    "origin": "top_left",
+    "mirrored": false
+  },
+  "images": {
+    "1.jpeg": {
+      "filename": "1.jpeg",
+      "canonical_corpus_name": "page_11.jpg",
+      "document_page": 11,
+      "dimensions": [1200, 1600],
+      "sha256": "703e3e64a329b958826a02bbb49f1d6567c99b10ce3bba8b2ad5b23b963419a6",
+      "layout_classification": "drop_cap_dense_body",
+      "expected_raw_detection": "NO_CANDIDATE",
+      "expected_final_gesture": "NO_FINGER"
+    },
+    "2.jpeg": {
+      "filename": "2.jpeg",
+      "canonical_corpus_name": "page_12.jpg",
+      "document_page": 12,
+      "dimensions": [1200, 1600],
+      "sha256": "4c4fc14f0ce6944a537c2b3ce27f25de11b1e93d8280cd619e3442b95854da2e",
+      "layout_classification": "running_header_dense_body",
+      "expected_raw_detection": "NO_CANDIDATE",
+      "expected_final_gesture": "NO_FINGER"
+    },
+    "3.jpeg": {
+      "filename": "3.jpeg",
+      "canonical_corpus_name": "page_13.jpg",
+      "document_page": 13,
+      "dimensions": [1200, 1600],
+      "sha256": "332ab77c6038ae511038ef1d624577aa2a053dfa7e001700c081b5d7ae5292f0",
+      "layout_classification": "chapter_header_dense_body",
+      "expected_raw_detection": "FINGER_DETECTED",
+      "expected_final_gesture": "SUCCESS"
+    },
+    "4.jpeg": {
+      "filename": "4.jpeg",
+      "canonical_corpus_name": "page_14.jpg",
+      "document_page": 14,
+      "dimensions": [1200, 1600],
+      "sha256": "3a7feb27748fb24e47a8ff0ae4da3552a9800d0492dc2215246a6689beacaf57",
+      "layout_classification": "running_header_dense_body",
+      "expected_raw_detection": "FINGER_DETECTED",
+      "expected_final_gesture": "SUCCESS"
+    },
+    "5.jpeg": {
+      "filename": "5.jpeg",
+      "canonical_corpus_name": "page_15_graph.jpg",
+      "document_page": 15,
+      "dimensions": [1200, 1600],
+      "sha256": "7a45210426af84effb6f559479edf9b36fbd7a5c079ecb1bc3ff4e5b036be998",
+      "layout_classification": "chart_and_body_text",
+      "expected_raw_detection": "NO_CANDIDATE",
+      "expected_final_gesture": "NO_FINGER"
+    },
+    "6.jpeg": {
+      "filename": "6.jpeg",
+      "canonical_corpus_name": "page_16_graph.jpg",
+      "document_page": 16,
+      "dimensions": [1200, 1600],
+      "sha256": "477b87988c02e339ec698fa72dde48ac6d42a2c89e88beca2b3981ddcb6d3809",
+      "layout_classification": "chart_and_body_text",
+      "expected_raw_detection": "NO_CANDIDATE",
+      "expected_final_gesture": "NO_FINGER"
+    },
+    "7.jpeg": {
+      "filename": "7.jpeg",
+      "canonical_corpus_name": "page_17_hand.jpg",
+      "document_page": 17,
+      "dimensions": [1200, 1600],
+      "sha256": "376bd9611c5123326c52779831688c062665473f7cf67991e912c3f2d551b2f7",
+      "layout_classification": "pointing_hand_frame",
+      "expected_raw_detection": "FINGER_DETECTED",
+      "expected_final_gesture": "SUCCESS"
+    },
+    "8.jpeg": {
+      "filename": "8.jpeg",
+      "canonical_corpus_name": "page_18.jpg",
+      "document_page": 18,
+      "dimensions": [1200, 1600],
+      "sha256": "b61de3a413ce93dfc7326fc55f683e033524d0e4140f1d7f981f17e7e49901de",
+      "layout_classification": "occluded_fragment_frame",
+      "expected_raw_detection": "CANDIDATE_REJECTED",
+      "expected_final_gesture": "SAFE_REJECT"
+    },
+    "9.jpeg": {
+      "filename": "9.jpeg",
+      "canonical_corpus_name": "page_19.jpg",
+      "document_page": 19,
+      "dimensions": [1200, 1600],
+      "sha256": "1fb57d5f8d38c3268c9bbe75fbc145b07bb11fa8fa8f20d37ffbbce51fca660a",
+      "layout_classification": "section_tail_dense_body",
+      "expected_raw_detection": "NO_CANDIDATE",
+      "expected_final_gesture": "NO_FINGER"
+    },
+    "10.jpeg": {
+      "filename": "10.jpeg",
+      "canonical_corpus_name": "chapter_title.jpg",
+      "document_page": 10,
+      "dimensions": [899, 1599],
+      "sha256": "2a0d290887eb64edfced698cb9d0722e8c43afa9d32d74bf7cbc476159286580",
+      "layout_classification": "large_title_typography",
+      "expected_raw_detection": "NO_CANDIDATE",
+      "expected_final_gesture": "NO_FINGER"
+    }
+  },
+  "cases": {
+    "page_11": {
+      "filename": "page_11.jpg",
+      "capture_metadata": { "width": 1200, "height": 1600, "orientation": 0 },
+      "content": { "layout": "dense_text_drop_cap", "page_number": 11 }
+    },
+    "page_12": {
+      "filename": "page_12.jpg",
+      "capture_metadata": { "width": 1200, "height": 1600, "orientation": 0 },
+      "content": { "layout": "header_paragraph_quote", "page_number": 12 }
+    },
+    "page_13": {
+      "filename": "page_13.jpg",
+      "capture_metadata": { "width": 1200, "height": 1600, "orientation": 0 },
+      "content": { "layout": "normal_text", "page_number": 13 }
+    },
+    "page_14": {
+      "filename": "page_14.jpg",
+      "capture_metadata": { "width": 1200, "height": 1600, "orientation": 0 },
+      "content": { "layout": "dense_paragraph", "page_number": 14 }
+    },
+    "page_15": {
+      "filename": "page_15_graph.jpg",
+      "capture_metadata": { "width": 1200, "height": 1600, "orientation": 0 },
+      "content": { "layout": "graph_and_text", "page_number": 15 }
+    },
+    "page_16": {
+      "filename": "page_16_graph.jpg",
+      "capture_metadata": { "width": 1200, "height": 1600, "orientation": 0 },
+      "content": { "layout": "graph_and_text", "page_number": 16 }
+    },
+    "page_17": {
+      "filename": "page_17_hand.jpg",
+      "capture_metadata": { "width": 1200, "height": 1600, "orientation": 0 },
+      "content": { "layout": "multi_finger_hand_occlusion", "page_number": 17 }
+    },
+    "page_18": {
+      "filename": "page_18.jpg",
+      "capture_metadata": { "width": 1200, "height": 1600, "orientation": 0 },
+      "content": { "layout": "finger_occlusion_split", "page_number": 18 }
+    },
+    "page_19": {
+      "filename": "page_19.jpg",
+      "capture_metadata": { "width": 1200, "height": 1600, "orientation": 0 },
+      "content": { "layout": "dense_text", "page_number": 19 }
+    },
+    "chapter_title": {
+      "filename": "chapter_title.jpg",
+      "capture_metadata": { "width": 899, "height": 1599, "orientation": 0 },
+      "content": { "layout": "large_title_heading", "page_number": 10 }
+    }
+  }
+}

@@ -107,4 +107,17 @@ class GestureConsensus:
                         detector=top_result.detector,
                     )
 
+        evidence = top_result.evidence
+        if evidence is not None:
+            second_votes = counts[sorted_candidates[1]] if len(sorted_candidates) > 1 else 0
+            second_mean_conf = (confidence_sums[sorted_candidates[1]] / second_votes) if second_votes > 0 else 0.0
+            evidence = evidence.model_copy(
+                update={
+                    "temporal_stability_frames": top_votes,
+                    "runner_up_temporal_support": second_votes,
+                    "runner_up_peak_score": second_mean_conf,
+                }
+            )
+            top_result = top_result.model_copy(update={"evidence": evidence})
+
         return top_result

@@ -62,6 +62,9 @@ from typing import Any
 from backend.app.core.environment import load_environment
 from backend.app.modules.audio_engine.playback_engine import PlaybackEngine
 from backend.app.modules.audio_engine.speech_provider import get_provider
+from backend.app.modules.audio_engine.ambient_cache import AmbientAssetCache
+from backend.app.modules.audio_engine.local_ambient import LocalAmbientProvider
+from backend.app.modules.audio_engine.scene_controller import SceneController
 from backend.app.modules.database.recording import (
     READER_ID,
     hydrate_reading_speed,
@@ -202,10 +205,15 @@ def build_session(
     # deterministic. `AUDIO_PROVIDER=edge` narrates out loud for real, which is
     # worth doing with `--realtime` and pointless at 60x.
     if audio is None:
+        ambient_cache = AmbientAssetCache(Path("assets/audio"))
+        ambient_provider = LocalAmbientProvider(asset_cache=ambient_cache)
+        scene_controller = SceneController()
         audio = PlaybackEngine(
             provider=get_provider(os.environ.get("AUDIO_PROVIDER") or "fake"),
             session_id=SESSION_ID,
             clock=clock.now,
+            ambient_provider=ambient_provider,
+            scene_controller=scene_controller,
         )
     elif audio is False:
         # Silent reading, asked for on purpose. The engine's audio call sites all

@@ -1,0 +1,80 @@
+{
+  "scenarios_version": "6.0",
+  "scenarios": {
+    "golden_positive_meaning": {
+      "name": "Golden Positive Meaning and Learning Flow",
+      "target_page": "3.jpeg",
+      "document_page": 13,
+      "steps": [
+        { "action": "start_session" },
+        { "action": "tts_enable", "expected_tts_active": true },
+        { "action": "ambient_enable", "expected_ambient_active": true },
+        { "action": "meaning_mode_request", "target": "challenge", "probe": [414.5, 594.5] },
+        { "action": "verify_selection", "expected_word": "challenge", "expected_status": "SUCCESS", "min_margin": 0.20 },
+        { "action": "verify_narration_pause", "expected_tts_active": false, "expected_ambient_active": true },
+        { "action": "verify_ai_explanation", "expected_key_client": "GROQ_API_KEY_1", "expected_call_count": 1 },
+        { "action": "meaning_mode_complete", "expected_tts_active": true },
+        { "action": "finish_session" },
+        { "action": "verify_review_persistence", "expected_persisted_word": "challenge" },
+        { "action": "generate_quiz", "expected_additional_ai_calls": 0, "expected_quiz_id_present": true },
+        { "action": "generate_flashcards", "expected_additional_ai_calls": 0, "expected_cards_count_ge": 1 }
+      ]
+    },
+    "golden_negative_occlusion": {
+      "name": "Golden Negative Occlusion Safety Flow",
+      "target_page": "8.jpeg",
+      "document_page": 18,
+      "steps": [
+        { "action": "start_session" },
+        { "action": "meaning_mode_request", "target": "alds", "probe": [315.5, 1098.5] },
+        { "action": "verify_selection", "expected_status": "SAFE_REJECT", "expected_reason": "OCR_FRAGMENT_OCCLUDED" },
+        { "action": "verify_ai_calls", "expected_call_count": 0 },
+        { "action": "verify_reading_continuation", "expected_session_active": true }
+      ]
+    },
+    "audio_scenario_01_tts_only": {
+      "name": "TTS Only Narration",
+      "ambient_enabled": false,
+      "tts_enabled": true,
+      "expected_runtime_state": { "tts_active": true, "ambient_active": false }
+    },
+    "audio_scenario_02_ambient_only": {
+      "name": "Ambient Only Background",
+      "ambient_enabled": true,
+      "tts_enabled": false,
+      "expected_runtime_state": { "tts_active": false, "ambient_active": true }
+    },
+    "audio_scenario_03_concurrent": {
+      "name": "Concurrent TTS and Ambient Playback",
+      "ambient_enabled": true,
+      "tts_enabled": true,
+      "expected_runtime_state": { "tts_active": true, "ambient_active": true }
+    },
+    "audio_scenario_04_meaning_pause_resume": {
+      "name": "Meaning Mode Pause and Resume",
+      "ambient_enabled": true,
+      "tts_enabled": true,
+      "steps": [
+        { "step": "initial_playback", "expected_tts": true, "expected_ambient": true },
+        { "step": "meaning_pause", "expected_tts": false, "expected_ambient": true },
+        { "step": "meaning_resume", "expected_tts": true, "expected_ambient": true }
+      ]
+    },
+    "audio_scenario_05_crossfade": {
+      "name": "Scene Controller Crossfade",
+      "scenes": ["peaceful", "tavern", "peaceful"],
+      "expected_transitions": 2
+    },
+    "hardware_disconnect_simulation": {
+      "name": "Peripheral Dropout and Recovery Simulation",
+      "events": [
+        { "event": "camera_disconnect", "expected_system_state": "DEGRADED", "subsystem": "camera" },
+        { "event": "camera_reconnect", "expected_system_state": "READY", "subsystem": "camera" },
+        { "event": "button_disconnect", "expected_system_state": "DEGRADED", "subsystem": "button" },
+        { "event": "button_reconnect", "expected_system_state": "READY", "subsystem": "button" },
+        { "event": "oled_disconnect", "expected_system_state": "DEGRADED", "subsystem": "oled" },
+        { "event": "oled_reconnect", "expected_system_state": "READY", "subsystem": "oled" }
+      ]
+    }
+  }
+}

@@ -30,6 +30,7 @@ class LocalAmbientProvider:
         self._cache = asset_cache
         self._crossfade_ms = crossfade_ms
         self._audio_enabled = False
+        self._is_paused = False
         self._current_tag: str | None = None
         self._current_channel: Any = None
         
@@ -59,6 +60,7 @@ class LocalAmbientProvider:
         if not self._audio_enabled:
             return
 
+        self._is_paused = False
         if decision.audio_tag == self._current_tag:
             # Same track — adjust volume for intensity, no restart.
             if self._current_channel and self._current_channel.get_busy():
@@ -106,6 +108,7 @@ class LocalAmbientProvider:
         if not self._audio_enabled:
             return
         if self._current_channel:
+            self._is_paused = True
             await asyncio.to_thread(self._current_channel.pause)
 
     async def resume(self) -> None:
@@ -113,6 +116,7 @@ class LocalAmbientProvider:
         if not self._audio_enabled:
             return
         if self._current_channel:
+            self._is_paused = False
             await asyncio.to_thread(self._current_channel.unpause)
 
     async def stop(self) -> None:
@@ -121,6 +125,7 @@ class LocalAmbientProvider:
             return
             
         self._current_tag = None
+        self._is_paused = False
         
         def _stop_all() -> None:
             for ch in self._channels:
@@ -132,3 +137,26 @@ class LocalAmbientProvider:
     @property
     def current_tag(self) -> str | None:
         return self._current_tag
+
+    @property
+    def is_playing(self) -> bool:
+        """Whether ambient audio is actively playing on a channel."""
+        return bool(self._audio_enabled and not self._is_paused and self._current_channel and self._current_channel.get_busy())
+
+    @property
+    def is_paused(self) -> bool:
+        """Whether ambient audio is in a paused state."""
+        return bool(self._audio_enabled and self._is_paused)
+
+    @property
+    def is_enabled(self) -> bool:
+        """Whether pygame mixer audio is initialized and enabled."""
+        return self._audio_enabled
+
+    @property
+    def current_channel_id(self) -> int | None:
+        """Active pygame channel index (0 or 1)."""
+        if not self._current_channel or not self._channels:
+            return None
+        return 0 if self._current_channel == self._channels[0] else 1
+

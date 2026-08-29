@@ -23,10 +23,13 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
+from typing import Any
 
 from backend.app.modules.audio_engine.audio_profiles import get_profile
 from backend.app.modules.audio_engine.models import (
+    AmbientState,
     AudioProfile,
+    AudioRuntimeState,
     PauseReason,
     PlaybackState,
     PlaybackStatistics,
@@ -105,6 +108,9 @@ class PlaybackEngine:
         
         self._ambient = ambient_provider
         self._scene = scene_controller
+        self._audio_generation = 0
+        self._ambient_was_active = False
+        self._tts_was_active = False
 
         self._profile: AudioProfile = get_profile(None)
         self._voice_id: str | None = None
@@ -127,6 +133,79 @@ class PlaybackEngine:
     @property
     def session_id(self) -> str:
         return self._session_id
+
+    @property
+    def provider(self):
+        """Active speech provider."""
+        return self._provider
+
+    @property
+    def sink(self) -> AudioSink:
+        """Active audio sink."""
+        return self._sink
+
+    @property
+    def ambient_provider(self) -> AmbientProviderInterface | None:
+        """Active ambient audio provider."""
+        return self._ambient
+
+    @property
+    def scene_controller(self) -> SceneController | None:
+        """Active scene controller."""
+        return self._scene
+
+    @property
+    def audio_generation(self) -> int:
+        """Active concurrency version token."""
+        return self._audio_generation
+
+    def audio_configuration(self) -> dict[str, Any]:
+        """Public diagnostic snapshot of active audio wiring."""
+        return {
+            "provider": self.provider_name,
+            "sink": type(self._sink).__name__,
+            "ambient": type(self._ambient).__name__ if self._ambient else None,
+            "scene": type(self._scene).__name__ if self._scene else None,
+            "generation": self._audio_generation,
+        }
+
+    def get_runtime_state(self) -> AudioRuntimeState:
+        """Observable runtime snapshot of both audio layers."""
+        ambient_st = AmbientState.STOPPED
+        asset = None
+        ch = None
+        vol = 0.25
+        expected = bool(self._scene is not None)
+        mech = "SOUND_OBJECT"
+
+        if self._ambient:
+            if not getattr(self._ambient, "is_enabled", False):
+                ambient_st = AmbientState.DISABLED
+            elif getattr(self._ambient, "is_paused", False) or (self._machine.state is PlaybackState.PAUSED and self._ambient_was_active):
+                ambient_st = AmbientState.PAUSED
+            elif getattr(self._ambient, "is_playing", False):
+                ambient_st = AmbientState.PLAYING
+            else:
+                ambient_st = AmbientState.STOPPED
+
+            asset = getattr(self._ambient, "current_tag", None)
+            ch = getattr(self._ambient, "current_channel_id", None)
+
+        return AudioRuntimeState(
+            tts_state=self._machine.state,
+            tts_voice=self._voice_id,
+            tts_rate=self._profile.rate if self._profile else 1.0,
+            ambient_state=ambient_st,
+            ambient_asset=asset,
+            ambient_channel=ch,
+            ambient_volume=vol,
+            ambient_expected_to_play=expected,
+            output_device="Windows Multimedia Mixer",
+            playback_mechanism=mech,
+            audio_generation=self._audio_generation,
+            started_at=self._stats.started_at,
+            last_error=self._error,
+        )
 
     def _log(self, event: str, **fields) -> None:
         """Emit one structured line through the app's logging config.
@@ -214,21 +293,31 @@ class PlaybackEngine:
                 provider=self.provider_name,
             )
 
+        self._audio_generation += 1
+        current_gen = self._audio_generation
         self._spawn_loop()
         
-        # Fire and forget scene evaluation + crossfade
+        # Fire and forget scene evaluation + crossfade with generation token
         if self._scene and self._ambient:
-            asyncio.create_task(self._ambient_fire_and_forget(pointer, text))
+            asyncio.create_task(self._ambient_fire_and_forget(pointer, text, current_gen))
 
         return self._machine.state
 
-    async def _ambient_fire_and_forget(self, pointer: ReadingPointer, text: str) -> None:
+    async def _ambient_fire_and_forget(self, pointer: ReadingPointer, text: str, generation: int) -> None:
         """Evaluates scene and crossfades ambient track without blocking TTS."""
         if not self._scene or not self._ambient:
             return
         
         try:
             decision = await self._scene.evaluate(pointer=pointer, paragraph=text)
+            if generation != self._audio_generation:
+                logger.info(
+                    "[audio:%s] Discarding stale ambient evaluation (gen %d != %d)",
+                    self._session_id,
+                    generation,
+                    self._audio_generation,
+                )
+                return
             await self._ambient.crossfade(decision)
         except Exception as e:
             logger.error("Ambient scene evaluation failed: %s", e)
@@ -239,12 +328,16 @@ class PlaybackEngine:
         Meaning Mode cuts the current sentence off rather than waiting for it.
         """
 
+        self._audio_generation += 1
         async with self._lock:
             if self._machine.state not in (
                 PlaybackState.PLAYING,
                 PlaybackState.WAITING_FOR_POINTER,
             ):
                 return self._machine.state
+
+            self._tts_was_active = True
+            self._ambient_was_active = bool(self._ambient and getattr(self._ambient, "is_playing", True))
 
             # The in-flight sentence was cut off, so put it back. Without this,
             # resume() would dequeue the *next* sentence and the reader would
@@ -271,6 +364,7 @@ class PlaybackEngine:
     async def resume(self) -> PlaybackState:
         """Continue from the preserved pointer."""
 
+        self._audio_generation += 1
         # Retire the paused loop before starting a new one. It may still be
         # unwinding from the sentence it was cut off in, and _spawn_loop()
         # declines to start a fresh loop while a task is alive — so without this
@@ -291,12 +385,16 @@ class PlaybackEngine:
             self._log("resumed", next_sentence=head.text[:40] if head else None)
 
         self._spawn_loop()
-        if self._ambient:
+        if self._ambient and self._ambient_was_active:
             await self._ambient.resume()
         return self._machine.state
 
     async def stop(self) -> PlaybackState:
         """End playback and clear all state."""
+
+        self._audio_generation += 1
+        self._tts_was_active = False
+        self._ambient_was_active = False
 
         async with self._lock:
             # Snapshot before IDLE resets the machine's clock, so the summary the

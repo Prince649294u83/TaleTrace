@@ -33,10 +33,12 @@ numpy>=1.24,<2.0
 # which needs a downloaded .task model file — a real change, not a version bump.
 mediapipe>=0.10,<0.10.30
 
-# Audio Engine — speech providers.
+# Audio Engine — speech providers and ambient playback.
 # Both are optional at import time: the audio engine loads without them and a
 # provider only fails when you actually try to speak through it. Edge is the
 # default; pyttsx3 is the offline fallback for when Edge is unreachable.
+# pygame is required for concurrent ambient audio playback.
+pygame>=2.5.0,<3.0
 edge-tts>=6.1,<8.0
 pyttsx3>=2.90,<3.0
 

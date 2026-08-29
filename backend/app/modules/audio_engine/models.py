@@ -231,3 +231,43 @@ class SceneDecision(BaseModel):
     intensity: float = 0.3
     audio_tag: str = "sfx_soft_ambient.mp3"
 
+
+class AmbientState(str, Enum):
+    """State of the ambient audio layer."""
+
+    NOT_REQUIRED = "not_required"
+    STOPPED = "stopped"
+    LOADING = "loading"
+    PLAYING = "playing"
+    PAUSED = "paused"
+    DISABLED = "disabled"
+    MISSING = "missing"
+    FAILED = "failed"
+
+
+class AudioRuntimeState(BaseModel):
+    """Observable runtime state distinguishing engine status from physical output."""
+
+    model_config = ConfigDict(frozen=True)
+
+    tts_state: PlaybackState = PlaybackState.IDLE
+    tts_voice: str | None = None
+    tts_rate: float = 1.0
+    ambient_state: AmbientState = AmbientState.STOPPED
+    ambient_asset: str | None = None
+    ambient_channel: int | None = None
+    ambient_track_position: float | None = None
+    ambient_loop_count: int | None = None
+    ambient_volume: float = 0.25
+    ambient_expected_to_play: bool = False
+    ambient_last_transition: str | None = None
+    last_audibility_test_passed: bool | None = None
+    audibility_verified_at: float | None = None
+    output_device: str | None = None
+    current_scene: str | None = None
+    playback_mechanism: str = "SOUND_OBJECT"
+    audio_generation: int = 0
+    started_at: float | None = None
+    last_error: str | None = None
+
+

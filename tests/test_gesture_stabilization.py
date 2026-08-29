@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import numpy as np
 import pytest
 
@@ -169,12 +170,13 @@ class TestGestureConsensusAndTransactions:
         assert resolved.status is SelectionStatus.LOW_CONFIDENCE
 
     def test_transaction_lifecycle_and_cancellation(self):
+        now = time.monotonic()
         tx = GestureTransaction(
             transaction_id="tx_001",
             session_id="session_test",
             page_id="page_1",
-            started_at=100.0,
-            deadline_monotonic=200000.0,
+            started_at=now,
+            deadline_monotonic=now + 100.0,
         )
         assert tx.is_valid("session_test", "page_1")
         assert tx.status == TransactionStatus.PENDING

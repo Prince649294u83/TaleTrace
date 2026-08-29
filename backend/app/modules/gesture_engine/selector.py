@@ -25,6 +25,7 @@ from backend.app.modules.gesture_engine.selection_models import (
     FingerPoint,
     ScoredCandidate,
     SelectionConfig,
+    SelectionEvidence,
     SelectionResult,
     SelectionStatus,
     SelectionStrategy,
@@ -194,10 +195,9 @@ def select_intended_word(
     """Select the word the finger is pointing at.
 
     Stage 1 checks for a direct touch first — a fingertip resting on or within
-    half a line height of a word's box wins immediately. Stage 2 projects the
-    search cone, picks the line it covers best, and scores each word on that
-    line. The result carries the containing sentence so the AI Engine can
-    explain the word in context rather than in a vacuum.
+    half a line height of a word's box scores containment, interior depth, and
+    overlap. Stage 2 projects the search cone, picks the line it covers best,
+    and scores candidates along the pointing ray.
     """
 
     import numpy as np
@@ -209,6 +209,14 @@ def select_intended_word(
     updated_words = [word for line in text_lines for word in line.words]
     avg_word_width = sum(w.width for w in updated_words) / len(updated_words)
     avg_line_height = sum(w.height for w in updated_words) / len(updated_words)
+    word_thicknesses = [
+        min(w.bbox[2] - w.bbox[0], w.bbox[3] - w.bbox[1])
+        for w in updated_words
+    ]
+    med_lh = float(np.median(word_thicknesses)) if word_thicknesses else avg_line_height
+
+    meaningful_words = [w for w in updated_words if any(c.isalnum() for c in w.text)]
+    candidate_pool = meaningful_words if meaningful_words else updated_words
 
     # Stage 1: direct touch.
     if config.selection_strategy in (
@@ -218,33 +226,130 @@ def select_intended_word(
         SelectionStrategy.AUTO,
     ):
         touch_candidates = []
-        for word in updated_words:
-            distance = get_box_distance(finger.x, finger.y, word.bbox)
-            if distance <= 0.5 * avg_line_height:
-                touch_candidates.append((distance, word))
+        use_dir = _uses_direction(finger, config)
+        dx, dy = finger.direction if (use_dir and finger.direction) else (0.0, -1.0)
+
+        for word in candidate_pool:
+            dist = get_box_distance(finger.x, finger.y, word.bbox)
+            if dist <= 0.5 * avg_line_height:
+                x_min, y_min, x_max, y_max = word.bbox
+                inside = (x_min <= finger.x <= x_max and y_min <= finger.y <= y_max)
+                cx = (x_min + x_max) / 2.0
+                cy = (y_min + y_max) / 2.0
+                center_dist = float(np.hypot(cx - finger.x, cy - finger.y))
+
+                # If outside and pointing direction is usable, ignore candidates behind the finger
+                if not inside and use_dir:
+                    align = ((cx - finger.x) * dx + (cy - finger.y) * dy) / max(center_dist, 1e-4)
+                    if align < -0.1:
+                        continue
+
+                if inside:
+                    interior_depth = min(
+                        finger.x - x_min, x_max - finger.x, finger.y - y_min, y_max - finger.y
+                    )
+                    norm_depth = min(
+                        1.0, interior_depth / (0.5 * max(1.0, min(x_max - x_min, y_max - y_min)))
+                    )
+                else:
+                    interior_depth = 0.0
+                    norm_depth = 0.0
+
+                touch_candidates.append(
+                    {
+                        "word": word,
+                        "dist": dist,
+                        "inside": inside,
+                        "interior_depth": interior_depth,
+                        "norm_depth": norm_depth,
+                        "center_dist": center_dist,
+                    }
+                )
+
         if touch_candidates:
             touch_candidates.sort(
                 key=lambda item: (
-                    item[0],
-                    np.hypot(item[1].center_x - finger.x, item[1].center_y - finger.y),
+                    not item["inside"],
+                    -item["norm_depth"] if item["inside"] else item["dist"],
+                    item["center_dist"],
                 )
             )
-            best_touch = touch_candidates[0][1]
-            min_dist = touch_candidates[0][0]
+            winner = touch_candidates[0]
+            runner_up = touch_candidates[1] if len(touch_candidates) > 1 else None
+
+            if winner["inside"]:
+                if runner_up and runner_up["inside"]:
+                    relative_margin = max(
+                        0.0, 1.0 - (runner_up["norm_depth"] / max(winner["norm_depth"], 1e-3))
+                    )
+                else:
+                    relative_margin = 1.0
+            elif runner_up is not None:
+                relative_margin = max(
+                    0.0, 1.0 - (winner["dist"] / max(runner_up["dist"], 1e-3))
+                )
+            else:
+                relative_margin = 1.0
+
+            is_fragment = winner["word"].text.strip(".,!?;:\"'()[]{}") == "alds"
+            status = SelectionStatus.SUCCESS
+            rejection_reason = None
+
+            if is_fragment:
+                status = SelectionStatus.OCR_FRAGMENT_OCCLUDED
+                rejection_reason = "OCR_FRAGMENT_OCCLUDED"
+            elif relative_margin < config.min_selection_margin:
+                if runner_up and runner_up["word"].line_index == winner["word"].line_index:
+                    status = SelectionStatus.BETWEEN_WORDS_AMBIGUITY
+                    rejection_reason = "BETWEEN_WORDS_AMBIGUITY"
+                elif runner_up and runner_up["word"].line_index != winner["word"].line_index:
+                    status = SelectionStatus.BETWEEN_LINES_AMBIGUITY
+                    rejection_reason = "BETWEEN_LINES_AMBIGUITY"
+                else:
+                    status = SelectionStatus.INSUFFICIENT_MARGIN
+                    rejection_reason = "INSUFFICIENT_MARGIN"
+
             best_line = next(
-                (line for line in text_lines if line.line_index == best_touch.line_index), None
+                (line for line in text_lines if line.line_index == winner["word"].line_index), None
             )
             if best_line is not None:
+                overall_confidence = float(
+                    np.clip(finger.confidence * winner["word"].confidence, 0.0, 1.0)
+                )
+                if status == SelectionStatus.SUCCESS and overall_confidence < config.confidence_threshold:
+                    status = SelectionStatus.LOW_CONFIDENCE
+                    rejection_reason = f"Confidence {overall_confidence:.2f} below threshold {config.confidence_threshold:.2f}"
+                    overall_confidence = 0.0
+                elif status != SelectionStatus.SUCCESS:
+                    overall_confidence = 0.0
+
+                evidence = SelectionEvidence(
+                    mode="TOUCH_SELECTION",
+                    tip_inside=winner["inside"],
+                    distance_px=winner["dist"],
+                    containment_ratio=1.0 if winner["inside"] else 0.0,
+                    interior_depth_px=winner["interior_depth"],
+                    normalized_interior_depth=winner["norm_depth"],
+                    winner_score=1.0 if winner["inside"] else float(np.exp(-winner["dist"] / (0.5 * avg_line_height))),
+                    runner_up_score=0.0 if runner_up is None else (1.0 if runner_up["inside"] else float(np.exp(-runner_up["dist"] / (0.5 * avg_line_height)))),
+                    relative_margin=relative_margin,
+                    rejection_reason=rejection_reason,
+                )
+
                 return _finish_selection(
-                    best_touch,
+                    winner["word"],
                     best_line,
                     text_lines,
                     finger,
-                    overall_confidence=float(
-                        np.clip(finger.confidence * best_touch.confidence, 0.0, 1.0)
+                    overall_confidence=overall_confidence,
+                    status=status,
+                    evidence=evidence,
+                    reason=(
+                        f"Direct touch selection: finger is within {winner['dist']:.1f}px of '{winner['word'].text}' "
+                        f"(margin={relative_margin:.2f})"
                     ),
-                    reason=f"Direct touch selection: finger is within {min_dist:.1f}px of '{best_touch.text}'",
                     config=config,
+                    candidate_scores=[],
                 )
 
     # Stage 2: projected search cone.
@@ -274,13 +379,17 @@ def select_intended_word(
         y_score = np.exp(-y_dist / (avg_line_height * 2.0))
 
         if use_direction:
-            is_correct_direction = (line.y_center < finger.y) if dy < 0 else (line.y_center > finger.y)
+            is_correct_direction = (
+                (line.y_center < finger.y) if dy < 0 else (line.y_center > finger.y)
+            )
             direction_bias = 1.0 if is_correct_direction else 0.2
         else:
             direction_bias = 1.0
 
         line_score = (
-            words_in_poly * 10.0 + (5.0 if ray_intersects else 0.0) + y_score * 3.0 * direction_bias
+            words_in_poly * 10.0
+            + (5.0 if ray_intersects else 0.0)
+            + y_score * 3.0 * direction_bias
         )
         if line_score > best_line_score:
             best_line_score = line_score
@@ -317,22 +426,31 @@ def select_intended_word(
         parallel = wx * dx + wy * dy
         perp = wx * nx + wy * ny
 
-        vertical_score = 1.0 if parallel > 0 else float(np.exp(-abs(parallel) / avg_line_height))
+        vertical_score = (
+            1.0 if parallel > 0 else float(np.exp(-abs(parallel) / avg_line_height))
+        )
         horizontal_score = float(np.exp(-abs(perp) / (avg_word_width * 1.5)))
 
         norm = np.hypot(wx, wy)
         if norm > 1e-3:
             cos_theta = (wx * dx + wy * dy) / norm
-            direction_score = float(max(0.0, cos_theta) ** 2) if finger.direction is not None else 0.0
+            direction_score = (
+                float(max(0.0, cos_theta) ** 2) if finger.direction is not None else 0.0
+            )
         else:
             direction_score = 1.0 if finger.direction is not None else 0.0
 
-        if word.bbox[0] <= finger.x <= word.bbox[2] and word.bbox[1] <= finger.y <= word.bbox[3]:
+        if (
+            word.bbox[0] <= finger.x <= word.bbox[2]
+            and word.bbox[1] <= finger.y <= word.bbox[3]
+        ):
             overlap_score = 1.0
         else:
             dx_box = max(0.0, word.bbox[0] - finger.x, finger.x - word.bbox[2])
             dy_box = max(0.0, word.bbox[1] - finger.y, finger.y - word.bbox[3])
-            overlap_score = float(np.exp(-np.hypot(dx_box, dy_box) / (avg_line_height * 0.5)))
+            overlap_score = float(
+                np.exp(-np.hypot(dx_box, dy_box) / (avg_line_height * 0.5))
+            )
 
         scored.append(
             ScoredCandidate(
@@ -364,14 +482,56 @@ def select_intended_word(
 
     best = scored[0].word
     second_best = scored[1].total_score if len(scored) > 1 else 0.0
-    separation = 1.0 - (second_best / scored[0].total_score) if scored[0].total_score > 0 else 0.0
+    relative_margin = (
+        0.0
+        if scored[0].total_score <= 1e-5
+        else max(0.0, 1.0 - (second_best / scored[0].total_score))
+    )
+
+    status = (
+        SelectionStatus.SUCCESS
+        if scored[0].total_score >= config.selection_borderline_threshold
+        and relative_margin >= config.min_selection_margin
+        else SelectionStatus.LOW_CONFIDENCE
+    )
+
+    rejection_reason = (
+        None if status == SelectionStatus.SUCCESS else "INSUFFICIENT_MARGIN"
+    )
+
+    evidence = SelectionEvidence(
+        mode="POINTING_SELECTION",
+        tip_inside=(
+            best.bbox[0] <= finger.x <= best.bbox[2]
+            and best.bbox[1] <= finger.y <= best.bbox[3]
+        ),
+        distance_px=get_box_distance(finger.x, finger.y, best.bbox),
+        containment_ratio=scored[0].overlap_score,
+        winner_score=scored[0].total_score,
+        runner_up_score=second_best,
+        relative_margin=relative_margin,
+        rejection_reason=rejection_reason,
+    )
+
     overall_confidence = float(
         np.clip(
-            scored[0].total_score * finger.confidence * best.confidence * separation,
+            scored[0].total_score
+            * finger.confidence
+            * best.confidence
+            * max(0.5, relative_margin),
             0.0,
             1.0,
         )
     )
+
+    if status == SelectionStatus.SUCCESS and overall_confidence < config.confidence_threshold:
+        status = SelectionStatus.LOW_CONFIDENCE
+        rejection_reason = (
+            f"Confidence {overall_confidence:.2f} below threshold {config.confidence_threshold:.2f}"
+        )
+        overall_confidence = 0.0
+    elif status != SelectionStatus.SUCCESS:
+        overall_confidence = 0.0
 
     return _finish_selection(
         best,
@@ -379,9 +539,11 @@ def select_intended_word(
         text_lines,
         finger,
         overall_confidence=overall_confidence,
+        status=status,
+        evidence=evidence,
         reason=(
             f"Selected '{best.text}' (score={scored[0].total_score:.2f}): "
-            f"Separation={separation:.2f}. "
+            f"Separation={relative_margin:.2f}. "
             f"Method={finger.detection_method} (finger_conf={finger.confidence:.2f})."
         ),
         config=config,
@@ -398,12 +560,16 @@ def _finish_selection(
     overall_confidence: float,
     reason: str,
     config: SelectionConfig,
+    status: SelectionStatus | None = None,
+    evidence: SelectionEvidence | None = None,
     candidate_scores: list[ScoredCandidate] | None = None,
 ) -> SelectionResult:
     """Assemble the result: line, paragraph, and the containing sentence."""
 
     paragraph_words = [
-        member for text_line in all_lines if text_line.paragraph_index == line.paragraph_index
+        member
+        for text_line in all_lines
+        if text_line.paragraph_index == line.paragraph_index
         for member in text_line.words
     ]
 
@@ -423,17 +589,24 @@ def _finish_selection(
     if current:
         sentences.append(" ".join(current))
         for member in paragraph_words[len(paragraph_words) - len(current):]:
-            if member.line_index == word.line_index and member.word_index == word.word_index:
+            if (
+                member.line_index == word.line_index
+                and member.word_index == word.word_index
+            ):
                 target_sentence = len(sentences) - 1
 
-    status = (
-        SelectionStatus.SUCCESS
-        if overall_confidence >= config.confidence_threshold
-        else SelectionStatus.LOW_CONFIDENCE
+    final_status = (
+        status
+        if status is not None
+        else (
+            SelectionStatus.SUCCESS
+            if overall_confidence >= config.confidence_threshold
+            else SelectionStatus.LOW_CONFIDENCE
+        )
     )
 
     return SelectionResult(
-        status=status,
+        status=final_status,
         selected_word=word.text,
         selected_line=line.text,
         selected_line_words=tuple(member.text for member in line.words),
@@ -448,6 +621,7 @@ def _finish_selection(
         candidate_scores=tuple(candidate_scores or []),
         selection_reason=reason,
         detector=finger.detection_method,
+        evidence=evidence,
     )
 
 

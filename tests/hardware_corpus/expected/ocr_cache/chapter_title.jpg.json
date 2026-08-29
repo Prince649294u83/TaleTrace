@@ -1,0 +1,1201 @@
+[
+  {
+    "text": "to",
+    "bbox": [
+      92,
+      512,
+      128,
+      553
+    ],
+    "confidence": 1.0,
+    "line_index": 0
+  },
+  {
+    "text": "study",
+    "bbox": [
+      114,
+      491,
+      164,
+      539
+    ],
+    "confidence": 1.0,
+    "line_index": 0
+  },
+  {
+    "text": "interest",
+    "bbox": [
+      151,
+      466,
+      208,
+      519
+    ],
+    "confidence": 1.0,
+    "line_index": 0
+  },
+  {
+    "text": "rates",
+    "bbox": [
+      195,
+      449,
+      238,
+      493
+    ],
+    "confidence": 1.0,
+    "line_index": 0
+  },
+  {
+    "text": "ye",
+    "bbox": [
+      225,
+      441,
+      253,
+      478
+    ],
+    "confidence": 1.0,
+    "line_index": 0
+  },
+  {
+    "text": "insecurity",
+    "bbox": [
+      92,
+      510,
+      178,
+      577
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": ",",
+    "bbox": [
+      92,
+      510,
+      178,
+      577
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "and",
+    "bbox": [
+      167,
+      498,
+      202,
+      539
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "opinion",
+    "bbox": [
+      190,
+      471,
+      256,
+      528
+    ],
+    "confidence": 1.0,
+    "line_index": 1
+  },
+  {
+    "text": "bottom",
+    "bbox": [
+      96,
+      547,
+      159,
+      600
+    ],
+    "confidence": 1.0,
+    "line_index": 2
+  },
+  {
+    "text": "of",
+    "bbox": [
+      148,
+      538,
+      177,
+      575
+    ],
+    "confidence": 1.0,
+    "line_index": 2
+  },
+  {
+    "text": "a",
+    "bbox": [
+      166,
+      531,
+      191,
+      566
+    ],
+    "confidence": 1.0,
+    "line_index": 2
+  },
+  {
+    "text": "bear",
+    "bbox": [
+      181,
+      518,
+      218,
+      558
+    ],
+    "confidence": 1.0,
+    "line_index": 2
+  },
+  {
+    "text": "make",
+    "bbox": [
+      207,
+      502,
+      252,
+      547
+    ],
+    "confidence": 1.0,
+    "line_index": 2
+  },
+  {
+    "text": "expected",
+    "bbox": [
+      97,
+      570,
+      169,
+      623
+    ],
+    "confidence": 1.0,
+    "line_index": 3
+  },
+  {
+    "text": "future",
+    "bbox": [
+      161,
+      552,
+      211,
+      595
+    ],
+    "confidence": 1.0,
+    "line_index": 3
+  },
+  {
+    "text": "return",
+    "bbox": [
+      202,
+      535,
+      248,
+      576
+    ],
+    "confidence": 1.0,
+    "line_index": 3
+  },
+  {
+    "text": "looking",
+    "bbox": [
+      95,
+      598,
+      162,
+      649
+    ],
+    "confidence": 1.0,
+    "line_index": 4
+  },
+  {
+    "text": "at",
+    "bbox": [
+      155,
+      589,
+      185,
+      626
+    ],
+    "confidence": 1.0,
+    "line_index": 4
+  },
+  {
+    "text": "your",
+    "bbox": [
+      177,
+      579,
+      214,
+      619
+    ],
+    "confidence": 1.0,
+    "line_index": 4
+  },
+  {
+    "text": "famu",
+    "bbox": [
+      208,
+      568,
+      245,
+      608
+    ],
+    "confidence": 1.0,
+    "line_index": 4
+  },
+  {
+    "text": "imperiling",
+    "bbox": [
+      96,
+      619,
+      178,
+      674
+    ],
+    "confidence": 1.0,
+    "line_index": 5
+  },
+  {
+    "text": "their",
+    "bbox": [
+      172,
+      608,
+      213,
+      649
+    ],
+    "confidence": 1.0,
+    "line_index": 5
+  },
+  {
+    "text": "futur",
+    "bbox": [
+      206,
+      597,
+      244,
+      637
+    ],
+    "confidence": 1.0,
+    "line_index": 5
+  },
+  {
+    "text": "I",
+    "bbox": [
+      116,
+      661,
+      136,
+      689
+    ],
+    "confidence": 1.0,
+    "line_index": 6
+  },
+  {
+    "text": "love",
+    "bbox": [
+      131,
+      650,
+      169,
+      684
+    ],
+    "confidence": 1.0,
+    "line_index": 6
+  },
+  {
+    "text": "Voltaire's",
+    "bbox": [
+      164,
+      630,
+      228,
+      672
+    ],
+    "confidence": 1.0,
+    "line_index": 6
+  },
+  {
+    "text": "a",
+    "bbox": [
+      223,
+      626,
+      241,
+      653
+    ],
+    "confidence": 1.0,
+    "line_index": 6
+  },
+  {
+    "text": "man",
+    "bbox": [
+      98,
+      679,
+      137,
+      713
+    ],
+    "confidence": 1.0,
+    "line_index": 7
+  },
+  {
+    "text": "always",
+    "bbox": [
+      136,
+      670,
+      189,
+      706
+    ],
+    "confidence": 1.0,
+    "line_index": 7
+  },
+  {
+    "text": "does",
+    "bbox": [
+      188,
+      664,
+      225,
+      698
+    ],
+    "confidence": 1.0,
+    "line_index": 7
+  },
+  {
+    "text": ".",
+    "bbox": [
+      188,
+      664,
+      225,
+      697
+    ],
+    "confidence": 1.0,
+    "line_index": 7
+  },
+  {
+    "text": "In",
+    "bbox": [
+      122,
+      710,
+      147,
+      738
+    ],
+    "confidence": 1.0,
+    "line_index": 8
+  },
+  {
+    "text": "2018",
+    "bbox": [
+      144,
+      700,
+      186,
+      731
+    ],
+    "confidence": 1.0,
+    "line_index": 8
+  },
+  {
+    "text": ",",
+    "bbox": [
+      144,
+      700,
+      186,
+      731
+    ],
+    "confidence": 1.0,
+    "line_index": 8
+  },
+  {
+    "text": "I",
+    "bbox": [
+      183,
+      697,
+      197,
+      721
+    ],
+    "confidence": 1.0,
+    "line_index": 8
+  },
+  {
+    "text": "wrote",
+    "bbox": [
+      194,
+      688,
+      235,
+      720
+    ],
+    "confidence": 1.0,
+    "line_index": 8
+  },
+  {
+    "text": "Alavs",
+    "bbox": [
+      100,
+      716,
+      149,
+      760
+    ],
+    "confidence": 1.0,
+    "line_index": 9
+  },
+  {
+    "text": ",",
+    "bbox": [
+      100,
+      716,
+      149,
+      760
+    ],
+    "confidence": 1.0,
+    "line_index": 9
+  },
+  {
+    "text": "biases",
+    "bbox": [
+      155,
+      716,
+      199,
+      760
+    ],
+    "confidence": 1.0,
+    "line_index": 9
+  },
+  {
+    "text": ",",
+    "bbox": [
+      155,
+      716,
+      199,
+      760
+    ],
+    "confidence": 1.0,
+    "line_index": 9
+  },
+  {
+    "text": "and",
+    "bbox": [
+      204,
+      716,
+      225,
+      760
+    ],
+    "confidence": 1.0,
+    "line_index": 9
+  },
+  {
+    "text": "when",
+    "bbox": [
+      97,
+      757,
+      150,
+      793
+    ],
+    "confidence": 1.0,
+    "line_index": 10
+  },
+  {
+    "text": "dealing",
+    "bbox": [
+      148,
+      748,
+      204,
+      784
+    ],
+    "confidence": 1.0,
+    "line_index": 10
+  },
+  {
+    "text": "wit",
+    "bbox": [
+      204,
+      744,
+      232,
+      776
+    ],
+    "confidence": 1.0,
+    "line_index": 10
+  },
+  {
+    "text": "and",
+    "bbox": [
+      100,
+      792,
+      137,
+      817
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "over",
+    "bbox": [
+      137,
+      786,
+      177,
+      811
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "one",
+    "bbox": [
+      177,
+      782,
+      207,
+      806
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "m",
+    "bbox": [
+      206,
+      779,
+      225,
+      801
+    ],
+    "confidence": 1.0,
+    "line_index": 11
+  },
+  {
+    "text": "dive",
+    "bbox": [
+      102,
+      808,
+      137,
+      836
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "into",
+    "bbox": [
+      140,
+      808,
+      175,
+      836
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "the",
+    "bbox": [
+      179,
+      808,
+      203,
+      836
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "to",
+    "bbox": [
+      207,
+      808,
+      223,
+      836
+    ],
+    "confidence": 1.0,
+    "line_index": 12
+  },
+  {
+    "text": "unaltered",
+    "bbox": [
+      98,
+      836,
+      181,
+      866
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "in",
+    "bbox": [
+      184,
+      836,
+      199,
+      866
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "th",
+    "bbox": [
+      203,
+      836,
+      219,
+      866
+    ],
+    "confidence": 1.0,
+    "line_index": 13
+  },
+  {
+    "text": "What",
+    "bbox": [
+      121,
+      862,
+      174,
+      897
+    ],
+    "confidence": 1.0,
+    "line_index": 14
+  },
+  {
+    "text": "you'r",
+    "bbox": [
+      178,
+      862,
+      221,
+      897
+    ],
+    "confidence": 1.0,
+    "line_index": 14
+  },
+  {
+    "text": "consider",
+    "bbox": [
+      98,
+      894,
+      179,
+      922
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "to",
+    "bbox": [
+      182,
+      894,
+      199,
+      922
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "h",
+    "bbox": [
+      203,
+      894,
+      216,
+      922
+    ],
+    "confidence": 1.0,
+    "line_index": 15
+  },
+  {
+    "text": "features",
+    "bbox": [
+      97,
+      928,
+      176,
+      950
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "of",
+    "bbox": [
+      178,
+      928,
+      202,
+      950
+    ],
+    "confidence": 1.0,
+    "line_index": 16
+  },
+  {
+    "text": "around",
+    "bbox": [
+      98,
+      959,
+      165,
+      978
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "a",
+    "bbox": [
+      167,
+      959,
+      181,
+      978
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "cor",
+    "bbox": [
+      183,
+      959,
+      211,
+      978
+    ],
+    "confidence": 1.0,
+    "line_index": 17
+  },
+  {
+    "text": "independent",
+    "bbox": [
+      93,
+      987,
+      210,
+      1019
+    ],
+    "confidence": 1.0,
+    "line_index": 18
+  },
+  {
+    "text": "It's",
+    "bbox": [
+      118,
+      1020,
+      151,
+      1041
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "not",
+    "bbox": [
+      153,
+      1020,
+      188,
+      1040
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "a",
+    "bbox": [
+      191,
+      1020,
+      205,
+      1041
+    ],
+    "confidence": 1.0,
+    "line_index": 19
+  },
+  {
+    "text": "the",
+    "bbox": [
+      93,
+      1050,
+      127,
+      1073
+    ],
+    "confidence": 1.0,
+    "line_index": 20
+  },
+  {
+    "text": "books",
+    "bbox": [
+      130,
+      1050,
+      187,
+      1073
+    ],
+    "confidence": 1.0,
+    "line_index": 20
+  },
+  {
+    "text": "ti",
+    "bbox": [
+      190,
+      1050,
+      205,
+      1073
+    ],
+    "confidence": 1.0,
+    "line_index": 20
+  },
+  {
+    "text": "pages",
+    "bbox": [
+      91,
+      1083,
+      153,
+      1113
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "of",
+    "bbox": [
+      153,
+      1080,
+      178,
+      1105
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "ex",
+    "bbox": [
+      179,
+      1077,
+      206,
+      1103
+    ],
+    "confidence": 1.0,
+    "line_index": 21
+  },
+  {
+    "text": "than",
+    "bbox": [
+      93,
+      1110,
+      140,
+      1136
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "one",
+    "bbox": [
+      143,
+      1111,
+      178,
+      1136
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "lo",
+    "bbox": [
+      180,
+      1111,
+      202,
+      1137
+    ],
+    "confidence": 1.0,
+    "line_index": 22
+  },
+  {
+    "text": "On",
+    "bbox": [
+      118,
+      1146,
+      153,
+      1172
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": "we",
+    "bbox": [
+      156,
+      1145,
+      185,
+      1170
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": "g",
+    "bbox": [
+      187,
+      1145,
+      202,
+      1171
+    ],
+    "confidence": 1.0,
+    "line_index": 23
+  },
+  {
+    "text": "1",
+    "bbox": [
+      335,
+      637,
+      414,
+      707
+    ],
+    "confidence": 1.0,
+    "line_index": 24
+  },
+  {
+    "text": ".",
+    "bbox": [
+      335,
+      637,
+      414,
+      707
+    ],
+    "confidence": 1.0,
+    "line_index": 24
+  },
+  {
+    "text": "\u203a",
+    "bbox": [
+      276,
+      704,
+      320,
+      823
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "Ones",
+    "bbox": [
+      336,
+      704,
+      570,
+      823
+    ],
+    "confidence": 1.0,
+    "line_index": 25
+  },
+  {
+    "text": "Drazy",
+    "bbox": [
+      281,
+      816,
+      516,
+      942
+    ],
+    "confidence": 1.0,
+    "line_index": 26
+  },
+  {
+    "text": "al",
+    "bbox": [
+      290,
+      998,
+      316,
+      1028
+    ],
+    "confidence": 1.0,
+    "line_index": 27
+  },
+  {
+    "text": "experiences",
+    "bbox": [
+      319,
+      996,
+      479,
+      1028
+    ],
+    "confidence": 1.0,
+    "line_index": 27
+  },
+  {
+    "text": "with",
+    "bbox": [
+      482,
+      994,
+      540,
+      1024
+    ],
+    "confidence": 1.0,
+    "line_index": 27
+  },
+  {
+    "text": "money",
+    "bbox": [
+      543,
+      993,
+      629,
+      1024
+    ],
+    "confidence": 1.0,
+    "line_index": 27
+  },
+  {
+    "text": "ybe",
+    "bbox": [
+      289,
+      1030,
+      336,
+      1063
+    ],
+    "confidence": 1.0,
+    "line_index": 28
+  },
+  {
+    "text": "0.00000001",
+    "bbox": [
+      340,
+      1024,
+      523,
+      1061
+    ],
+    "confidence": 1.0,
+    "line_index": 28
+  },
+  {
+    "text": "%",
+    "bbox": [
+      340,
+      1024,
+      523,
+      1061
+    ],
+    "confidence": 1.0,
+    "line_index": 28
+  },
+  {
+    "text": "of",
+    "bbox": [
+      525,
+      1023,
+      553,
+      1055
+    ],
+    "confidence": 1.0,
+    "line_index": 28
+  },
+  {
+    "text": "what's",
+    "bbox": [
+      556,
+      1019,
+      646,
+      1053
+    ],
+    "confidence": 1.0,
+    "line_index": 28
+  },
+  {
+    "text": "he",
+    "bbox": [
+      294,
+      1066,
+      330,
+      1103
+    ],
+    "confidence": 1.0,
+    "line_index": 29
+  },
+  {
+    "text": "world",
+    "bbox": [
+      334,
+      1062,
+      423,
+      1100
+    ],
+    "confidence": 1.0,
+    "line_index": 29
+  },
+  {
+    "text": ",",
+    "bbox": [
+      334,
+      1062,
+      423,
+      1100
+    ],
+    "confidence": 1.0,
+    "line_index": 29
+  },
+  {
+    "text": "but",
+    "bbox": [
+      425,
+      1060,
+      470,
+      1097
+    ],
+    "confidence": 1.0,
+    "line_index": 29
+  },
+  {
+    "text": "maybe",
+    "bbox": [
+      473,
+      1056,
+      562,
+      1094
+    ],
+    "confidence": 1.0,
+    "line_index": 29
+  },
+  {
+    "text": "80",
+    "bbox": [
+      565,
+      1054,
+      628,
+      1091
+    ],
+    "confidence": 1.0,
+    "line_index": 29
+  },
+  {
+    "text": "%",
+    "bbox": [
+      565,
+      1054,
+      628,
+      1091
+    ],
+    "confidence": 1.0,
+    "line_index": 29
+  },
+  {
+    "text": "of",
+    "bbox": [
+      631,
+      1052,
+      664,
+      1089
+    ],
+    "confidence": 1.0,
+    "line_index": 29
+  },
+  {
+    "text": "think",
+    "bbox": [
+      301,
+      1101,
+      374,
+      1132
+    ],
+    "confidence": 1.0,
+    "line_index": 30
+  },
+  {
+    "text": "the",
+    "bbox": [
+      377,
+      1099,
+      425,
+      1129
+    ],
+    "confidence": 1.0,
+    "line_index": 30
+  },
+  {
+    "text": "world",
+    "bbox": [
+      428,
+      1096,
+      509,
+      1127
+    ],
+    "confidence": 1.0,
+    "line_index": 30
+  },
+  {
+    "text": "works",
+    "bbox": [
+      511,
+      1094,
+      604,
+      1126
+    ],
+    "confidence": 1.0,
+    "line_index": 30
+  },
+  {
+    "text": ".",
+    "bbox": [
+      511,
+      1094,
+      604,
+      1126
+    ],
+    "confidence": 1.0,
+    "line_index": 30
+  }
+]

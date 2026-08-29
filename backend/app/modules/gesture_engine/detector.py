@@ -196,18 +196,26 @@ def detect_partial_finger(
     if not contours:
         return None
 
-    # Filter contours for valid finger blobs (minimum 500px area)
+    # Filter contours for valid finger blobs
+    min_area = max(200, int(0.0015 * width * height))
+    min_dim = max(8, int(0.015 * min(width, height)))
+    border_margin = max(15, int(0.07 * min(width, height)))
+
     candidates = []
     for c in contours:
         area = cv2.contourArea(c)
-        if area < 500:
+        if area < min_area or area > (0.25 * width * height):
             continue
         hull = cv2.convexHull(c)
         hull_area = cv2.contourArea(hull)
         solidity = float(area) / hull_area if hull_area > 0 else 0.0
 
         _, _, bw, bh = cv2.boundingRect(c)
+        if min(bw, bh) < min_dim:
+            continue
         aspect = max(float(bw) / max(bh, 1), float(bh) / max(bw, 1))
+        if aspect < 1.35 and area < (0.05 * width * height):
+            continue
 
         prior_score = 1.0
         if prior is not None:
@@ -242,8 +250,6 @@ def detect_partial_finger(
     max_idx = int(np.argmax(projections))
     end_a = (float(pts[min_idx, 0]), float(pts[min_idx, 1]))
     end_b = (float(pts[max_idx, 0]), float(pts[max_idx, 1]))
-
-    border_margin = 15
     touches_border_a = (
         end_a[0] <= border_margin
         or end_a[0] >= width - border_margin
@@ -257,6 +263,9 @@ def detect_partial_finger(
         or end_b[1] >= height - border_margin
     )
 
+    if touches_border_a and touches_border_b:
+        return None  # Both ends on margin -> border/corner artifact
+
     if touches_border_a and not touches_border_b:
         base, tip = end_a, end_b
     elif touches_border_b and not touches_border_a:
@@ -268,6 +277,9 @@ def detect_partial_finger(
             tip, base = end_a, end_b
         else:
             tip, base = end_b, end_a
+
+    if tip[0] <= border_margin or tip[0] >= width - border_margin or tip[1] <= border_margin or tip[1] >= height - border_margin:
+        return None  # Fingertip cannot be within outer page margin
 
     dir_dx = tip[0] - base[0]
     dir_dy = tip[1] - base[1]
@@ -330,6 +342,10 @@ def detect_finger_fused(
         partial_obs = None
 
     # 3. Tier 3: Motion Tracker
+    if mp_obs is None and partial_obs is None:
+        _GLOBAL_TRACKER.reset()
+        return None
+
     strongest_obs = mp_obs if (mp_obs is not None and mp_obs.confidence >= 0.5) else partial_obs
     tracker_obs = _GLOBAL_TRACKER.update(strongest_obs, frame_id=frame_id)
 

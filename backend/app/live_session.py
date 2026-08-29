@@ -61,6 +61,9 @@ from backend.app.modules.database.session import get_db
 from backend.app.modules.database.models import Reader
 from backend.app.modules.audio_engine.speech_provider import get_provider, LocalAudioSink
 from backend.app.modules.audio_engine.playback_engine import PlaybackEngine
+from backend.app.modules.audio_engine.ambient_cache import AmbientAssetCache
+from backend.app.modules.audio_engine.local_ambient import LocalAmbientProvider
+from backend.app.modules.audio_engine.scene_controller import SceneController
 from backend.app.shared.groq_keys import (
     AI_ENGINE_VARIABLE,
     CHAT_MODEL_VARIABLE,
@@ -387,7 +390,25 @@ async def _run(args: argparse.Namespace) -> int:
     reader = db.get(Reader, READER_ID)
     voice_id = reader.device_prefs.get("ttsVoice") if reader and reader.device_prefs else None
     provider = get_provider(voice_id=voice_id)
-    audio = PlaybackEngine(session_id=SESSION_ID, provider=provider, sink=LocalAudioSink())
+
+    # Build complete dual-layer audio stack (TTS narration + Ambient background loop)
+    ambient_cache = AmbientAssetCache(Path("assets/audio"))
+    ambient_provider = LocalAmbientProvider(asset_cache=ambient_cache)
+    scene_controller = SceneController()
+
+    audio = PlaybackEngine(
+        session_id=SESSION_ID,
+        provider=provider,
+        sink=LocalAudioSink(),
+        ambient_provider=ambient_provider,
+        scene_controller=scene_controller,
+    )
+
+    # Architectural assertions guaranteeing complete audio wiring
+    assert audio.provider is not None, "TTS Provider must be configured"
+    assert audio.sink is not None, "Audio Sink must be configured"
+    assert audio.ambient_provider is not None, "Ambient Provider must be configured"
+    assert audio.scene_controller is not None, "Scene Controller must be configured"
 
     if ai is None:
         print(f"  No {AI_ENGINE_VARIABLE}: Meaning Mode will pause but not explain,")

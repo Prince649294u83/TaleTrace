@@ -337,10 +337,16 @@ python -m uvicorn backend.app.main:app --reload
 Run the full automated test suite to ensure 100% of modules are verified:
 
 ```bash
-# Run all backend tests (799 tests)
+# Run all backend tests (822 tests)
 python -m pytest
 
-# Run frontend tests (11 tests)
+# Run dedicated hardware integration tests (124 tests)
+python -m pytest tests/test_device_integration.py tests/test_virtual_devices.py
+
+# Run synthetic corpus generation and merge memory validation
+python scripts/test_synthetic_pipeline.py
+
+# Run frontend vitest tests (11 tests)
 cd frontend && npm test && cd ..
 
 # Run the end-to-end integration gate

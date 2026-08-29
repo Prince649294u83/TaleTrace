@@ -1,0 +1,140 @@
+{
+  "corpus_ground_truth_version": "6.0",
+  "ocr_engine": 2,
+  "pages": {
+    "1.jpeg": {
+      "document_page": 11,
+      "canonical_corpus_name": "page_11.jpg",
+      "total_words": 263,
+      "total_lines": 26,
+      "median_line_height": 44.0,
+      "median_word_width": 68.0,
+      "drop_cap": {
+        "text": "L",
+        "semantic_binding": "sentence_1",
+        "expected_first_sentence_prefix": "LET ME TELL you about a problem"
+      }
+    },
+    "2.jpeg": {
+      "document_page": 12,
+      "canonical_corpus_name": "page_12.jpg",
+      "total_words": 377,
+      "total_lines": 34,
+      "median_line_height": 47.0,
+      "median_word_width": 64.0,
+      "header_text": "THE PSYCHOLOGY OF MONEY"
+    },
+    "3.jpeg": {
+      "document_page": 13,
+      "canonical_corpus_name": "page_13.jpg",
+      "total_words": 210,
+      "total_lines": 31,
+      "median_line_height": 40.0,
+      "median_word_width": 66.0,
+      "targets": {
+        "challenge": {
+          "text": "challenge",
+          "bbox": [359, 575, 470, 614],
+          "centroid": [414.5, 594.5],
+          "expected_status": "SUCCESS",
+          "min_relative_margin": 0.20
+        },
+        "gap_challenge_for": {
+          "probe_point": [471.0, 595.0],
+          "left_candidate": "challenge",
+          "right_candidate": "for",
+          "expected_status": "BETWEEN_WORDS_AMBIGUITY",
+          "max_relative_margin": 0.19
+        }
+      }
+    },
+    "4.jpeg": {
+      "document_page": 14,
+      "canonical_corpus_name": "page_14.jpg",
+      "total_words": 294,
+      "total_lines": 44,
+      "median_line_height": 48.0,
+      "median_word_width": 65.0,
+      "targets": {
+        "financial": {
+          "text": "Financial",
+          "bbox": [346, 801, 471, 850],
+          "centroid": [408.5, 825.5],
+          "expected_status": "SUCCESS",
+          "min_relative_margin": 0.20
+        }
+      }
+    },
+    "5.jpeg": {
+      "document_page": 15,
+      "canonical_corpus_name": "page_15_graph.jpg",
+      "total_words": 118,
+      "total_lines": 21,
+      "median_line_height": 27.0,
+      "median_word_width": 55.0,
+      "layout_type": "chart_and_body"
+    },
+    "6.jpeg": {
+      "document_page": 16,
+      "canonical_corpus_name": "page_16_graph.jpg",
+      "total_words": 248,
+      "total_lines": 51,
+      "median_line_height": 26.0,
+      "median_word_width": 52.0,
+      "layout_type": "chart_and_body"
+    },
+    "7.jpeg": {
+      "document_page": 17,
+      "canonical_corpus_name": "page_17_hand.jpg",
+      "total_words": 362,
+      "total_lines": 34,
+      "median_line_height": 32.0,
+      "median_word_width": 62.0,
+      "targets": {
+        "that": {
+          "text": "That",
+          "bbox": [1051, 854, 1088, 903],
+          "centroid": [1069.5, 878.5],
+          "expected_status": "SUCCESS",
+          "min_relative_margin": 0.15
+        }
+      }
+    },
+    "8.jpeg": {
+      "document_page": 18,
+      "canonical_corpus_name": "page_18.jpg",
+      "total_words": 303,
+      "total_lines": 42,
+      "median_line_height": 47.0,
+      "median_word_width": 65.0,
+      "artifacts": {
+        "alds": {
+          "ocr_text": "alds",
+          "ocr_classification": "OCR_FRAGMENT",
+          "semantic_target": null,
+          "bbox": [287, 1079, 344, 1118],
+          "centroid": [315.5, 1098.5],
+          "expected_selection": "SAFE_REJECT",
+          "expected_reason": "OCR_FRAGMENT_OCCLUDED",
+          "max_ai_calls": 0
+        }
+      }
+    },
+    "9.jpeg": {
+      "document_page": 19,
+      "canonical_corpus_name": "page_19.jpg",
+      "total_words": 354,
+      "total_lines": 34,
+      "median_line_height": 45.0,
+      "median_word_width": 64.0
+    },
+    "10.jpeg": {
+      "document_page": 10,
+      "canonical_corpus_name": "chapter_title.jpg",
+      "total_words": 109,
+      "total_lines": 14,
+      "median_line_height": 52.0,
+      "median_word_width": 70.0
+    }
+  }
+}

@@ -34,6 +34,12 @@ class SelectionStatus(str, Enum):
     OCR_EMPTY = "ocr_data_empty"
     PAGE_CONTEXT_MISMATCH = "page_context_mismatch"
     OUT_OF_BOUNDS = "out_of_bounds"
+    BETWEEN_WORDS_AMBIGUITY = "between_words_ambiguity"
+    BETWEEN_LINES_AMBIGUITY = "between_lines_ambiguity"
+    INSUFFICIENT_MARGIN = "insufficient_selection_margin"
+    OCR_FRAGMENT_OCCLUDED = "ocr_fragment_occluded"
+    TEMPORAL_INSTABILITY = "temporal_instability"
+    SAFE_REJECT = "safe_reject"
 
 
 class SelectionStrategy(str, Enum):
@@ -169,6 +175,29 @@ class CoordinateTransformer(BaseModel):
         return (x - self.offset_x) / self.scale_x, (y - self.offset_y) / self.scale_y
 
 
+class SelectionEvidence(BaseModel):
+    """Transparent geometric, spatial, and statistical audit trail for word selection."""
+
+    model_config = ConfigDict(frozen=True)
+
+    mode: str = "TOUCH_SELECTION"  # "TOUCH_SELECTION" | "POINTING_SELECTION"
+    tip_inside: bool = False
+    distance_px: float = 0.0
+    containment_ratio: float = 0.0
+    interior_depth_px: float = 0.0
+    normalized_interior_depth: float = 0.0
+    vertical_clearance_px: float = 0.0
+    line_fit_score: float = 0.0
+    occlusion_ratio: float = 0.0
+    winner_score: float = 0.0
+    runner_up_score: float = 0.0
+    relative_margin: float = 0.0
+    temporal_stability_frames: int = 1
+    runner_up_temporal_support: int = 0
+    runner_up_peak_score: float = 0.0
+    rejection_reason: str | None = None
+
+
 class SelectionConfig(BaseModel):
     """Tuning for word selection. Defaults are the values tuned on real pages."""
 
@@ -181,7 +210,19 @@ class SelectionConfig(BaseModel):
     search_height_below: float = 0.3
     search_width_ratio: float = 3.0
 
-    # Scoring weights, summing to 1.0 for the hybrid case.
+    # Direct touch scoring weights
+    touch_containment_weight: float = 0.40
+    touch_interior_weight: float = 0.20
+    touch_overlap_weight: float = 0.20
+    touch_distance_weight: float = 0.20
+
+    # Ray pointing scoring weights
+    point_ray_weight: float = 0.35
+    point_direction_weight: float = 0.35
+    point_distance_weight: float = 0.20
+    point_line_weight: float = 0.10
+
+    # Legacy scoring weights for backward compatibility
     vertical_bias: float = 0.30
     horizontal_weight: float = 0.30
     direction_weight: float = 0.25
@@ -197,6 +238,10 @@ class SelectionConfig(BaseModel):
     selection_ratio: float = 1.15
     hysteresis_margin: float = 0.15
 
+    selection_success_threshold: float = 0.70
+    selection_borderline_threshold: float = 0.40
+    min_selection_margin: float = 0.20
+
 
 class ScoredCandidate(BaseModel):
     """One word's score breakdown. Kept for the dashboard and for explaining a miss."""
@@ -210,6 +255,7 @@ class ScoredCandidate(BaseModel):
     overlap_score: float
     total_score: float
     scoring_reason: str = ""
+    evidence: SelectionEvidence | None = None
 
 
 class SelectionResult(BaseModel):
@@ -232,6 +278,7 @@ class SelectionResult(BaseModel):
     candidate_scores: tuple[ScoredCandidate, ...] = ()
     selection_reason: str = ""
     detector: str = "mediapipe"
+    evidence: SelectionEvidence | None = None
 
     image_size: tuple[int, int] = (0, 0)
     selection_time_ms: float = 0.0
