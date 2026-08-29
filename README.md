@@ -22,6 +22,8 @@ handoff: the rules that cannot be broken, the invariants that look like bugs but
 are not, what to build next, and the traps that have already cost somebody an
 afternoon.
 
+For hardware setup, wiring, firmware flashing, and step-by-step physical rig testing, refer to the [Hardware Testing & Rehearsal Master Guide](docs/HARDWARE_TESTING_GUIDE.md).
+
 ---
 
 ## Quick Start (One Command)
