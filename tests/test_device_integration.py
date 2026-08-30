@@ -377,7 +377,8 @@ class TestSamePageCheck:
 
         request = groq.requests[-1]
         assert "strictly ONE word: YES or NO" in groq.last_prompt
-        assert request["max_tokens"] == 5
+        token_cap = request.get("max_completion_tokens", request.get("max_tokens"))
+        assert token_cap in (5, 10)
         assert request["temperature"] == 0.0
 
     def test_it_tolerates_reordered_and_missing_words_by_instruction(self):

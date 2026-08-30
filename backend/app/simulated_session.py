@@ -147,6 +147,7 @@ def build_session(
     script: tuple[tuple[float, str], ...] = _SCRIPT,
     audio: Any = None,
     ai: Any = None,
+    ocr: Any = None,
 ) -> tuple[DeviceLoop, VirtualClock]:
     """Assemble Simulation Mode. The one place the virtual devices are chosen.
 
@@ -207,7 +208,7 @@ def build_session(
     if audio is None:
         ambient_cache = AmbientAssetCache(Path("assets/audio"))
         ambient_provider = LocalAmbientProvider(asset_cache=ambient_cache)
-        scene_controller = SceneController()
+        scene_controller = SceneController(ai=ai)
         audio = PlaybackEngine(
             provider=get_provider(os.environ.get("AUDIO_PROVIDER") or "fake"),
             session_id=SESSION_ID,
@@ -228,13 +229,15 @@ def build_session(
         # instead of from what was spoken.
         audio = None
 
-    if offline:
-        from backend.app.modules.ocr.vision_cache import CachedVisionProvider
+    if offline or ocr is not None:
+        if ocr is None:
+            from backend.app.modules.ocr.vision_cache import CachedVisionProvider
+            ocr = CachedVisionProvider()
 
         runtime = ReadingRuntime.build(
             session_id=SESSION_ID,
             reader_id=READER_ID,
-            ocr_provider=CachedVisionProvider(),
+            ocr_provider=ocr,
             audio=audio,
             ai=ai,
             speed=reading_speed,

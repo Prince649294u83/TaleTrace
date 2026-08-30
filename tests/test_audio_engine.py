@@ -417,11 +417,74 @@ class TestProviders:
     @pytest.mark.asyncio
     async def test_synthesis_failure_surfaces_without_crashing(self):
         engine = build_engine(provider=FakeSpeechProvider(fail=True))
-        await engine.start(pointer=ReadingPointer(), text="One. Two.", profile=FAST)
+        ptr = ReadingPointer(page_index=1, paragraph_index=0, sentence_index=0)
+        await engine.start(pointer=ptr, text="One. Two.", profile=FAST)
         await engine.wait_for_idle()
         status = engine.get_status()
         assert status.error is not None
         assert status.state is PlaybackState.FINISHED
+        assert status.statistics.words_spoken == 0
+        assert status.statistics.sentences_spoken == 0
+        assert status.pointer == ptr
+
+    @pytest.mark.asyncio
+    async def test_failed_synthesis_never_counts_as_spoken_and_never_advances_pointer(self):
+        """A sentence that was never successfully produced must not consume the reading cursor."""
+        engine = build_engine(provider=FakeSpeechProvider(fail=True))
+        initial_ptr = ReadingPointer(page_index=2, paragraph_index=1, sentence_index=0)
+        await engine.start(pointer=initial_ptr, text="Sentence one. Sentence two.", profile=FAST)
+        await engine.wait_for_idle()
+
+        status = engine.get_status()
+        assert status.error == "synthesis failed"
+        assert status.statistics.words_spoken == 0
+        assert status.statistics.sentences_spoken == 0
+        assert status.pointer == initial_ptr
+        # Chunk is preserved at the head of the queue so it remains available
+        assert status.queued_sentences == 2
+
+    @pytest.mark.asyncio
+    async def test_successful_synthesis_counts_as_spoken_and_advances_pointer(self):
+        """A sentence that was spoken to completion increments words_spoken and advances the pointer."""
+        engine = build_engine(provider=FakeSpeechProvider())
+        initial_ptr = ReadingPointer(page_index=1, paragraph_index=0, sentence_index=0)
+        await engine.start(pointer=initial_ptr, text="One two. Three four five.", profile=FAST)
+        await engine.wait_for_idle()
+
+        status = engine.get_status()
+        assert status.error is None
+        assert status.statistics.words_spoken == 5
+        assert status.statistics.sentences_spoken == 2
+        assert status.pointer == ReadingPointer(page_index=1, paragraph_index=0, sentence_index=2)
+
+    @pytest.mark.asyncio
+    async def test_synthesis_success_but_playback_sink_failure_never_counts_as_spoken_and_never_advances_pointer(self):
+        """If synthesis succeeds but the host audio sink fails to play, it must NOT count as spoken."""
+        class FailingAudioSink:
+            async def play(self, audio: bytes, *, content_type: str = "audio/mpeg") -> None:
+                raise RuntimeError("Audio hardware device disconnected")
+
+            async def stop(self) -> None:
+                pass
+
+        engine = PlaybackEngine(
+            provider=FakeSpeechProvider(),
+            sink=FailingAudioSink(),
+            auto_advance=True,
+        )
+        engine.set_profile(FAST)
+        initial_ptr = ReadingPointer(page_index=3, paragraph_index=0, sentence_index=0)
+
+        await engine.start(pointer=initial_ptr, text="Sentence one. Sentence two.", profile=FAST)
+        await engine.wait_for_idle()
+
+        status = engine.get_status()
+        assert "Audio sink playback failed" in (status.error or "")
+        assert status.statistics.words_spoken == 0
+        assert status.statistics.sentences_spoken == 0
+        assert status.pointer == initial_ptr
+        # Chunk preserved at front of queue
+        assert status.queued_sentences == 2
 
     def test_get_provider_by_name(self):
         assert get_provider("offline").provider_name == "offline"
@@ -1485,3 +1548,71 @@ class TestRefreshKeepsTheSentenceTheReaderIsOn:
         await engine.wait_for_idle()
 
         assert provider.spoken.count("First sentence.") == 1
+
+
+class TestOfflineSpeechProvider:
+    """Verify offline SAPI5 provider synthesis, WAV generation, and PlaybackEngine lifecycle."""
+
+    @pytest.mark.asyncio
+    async def test_offline_speech_provider_synthesizes_wav_bytes(self):
+        provider = OfflineSpeechProvider()
+        response = await provider.synthesize(
+            SpeechRequest(text="Offline speech test for TaleTrace.", profile=FAST)
+        )
+        assert response.ok, f"Synthesis failed: {response.error}"
+        assert response.content_type == "audio/wav"
+        assert response.audio is not None
+        assert len(response.audio) > 1000, "WAV audio output should be non-empty"
+
+    @pytest.mark.asyncio
+    async def test_playback_engine_with_offline_provider_lifecycle(self):
+        """Offline provider works seamlessly with PlaybackEngine pause, resume, and stop."""
+        provider = OfflineSpeechProvider()
+        engine = build_engine(provider=provider)
+
+        await engine.start(pointer=ReadingPointer(page_index=1), text="First sentence. Second sentence.", profile=FAST)
+        assert engine.get_status().state in (PlaybackState.PLAYING, PlaybackState.FINISHED)
+
+        await engine.pause()
+        assert engine.get_status().state is PlaybackState.PAUSED
+
+        await engine.resume()
+        await engine.stop()
+        assert engine.get_status().state is PlaybackState.IDLE
+
+    @pytest.mark.asyncio
+    async def test_offline_provider_meaning_mode_immediate_stop(self):
+        """Meaning Mode triggers pause/stop on sink, immediately cutting off audio."""
+        stopped = asyncio.Event()
+
+        class TrackingAudioSink:
+            async def play(self, audio: bytes, *, content_type: str = "audio/wav") -> None:
+                # Simulate active audio playback
+                await asyncio.sleep(0.5)
+
+            async def stop(self) -> None:
+                stopped.set()
+
+        provider = OfflineSpeechProvider()
+        engine = PlaybackEngine(provider=provider, sink=TrackingAudioSink(), auto_advance=True)
+        engine.set_profile(FAST)
+
+        await engine.start(pointer=ReadingPointer(page_index=1), text="A long sentence for offline speech.")
+        # Trigger Meaning Mode pause immediately
+        await engine.pause(reason=PauseReason.MEANING_MODE)
+        assert engine.get_status().state is PlaybackState.PAUSED
+        assert stopped.is_set(), "Sink stop() must be called immediately upon Meaning Mode pause"
+
+    @pytest.mark.asyncio
+    async def test_offline_provider_in_flight_synthesis_task_cancellation(self):
+        """Cancelling the synthesis task cleanly aborts without leaving background tasks."""
+        provider = OfflineSpeechProvider()
+        task = asyncio.create_task(
+            provider.synthesize(SpeechRequest(text="Long text for cancellation test.", profile=FAST))
+        )
+        await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+

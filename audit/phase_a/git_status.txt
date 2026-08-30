@@ -1,0 +1,4 @@
+Git working tree:
+- Source changes: none
+- taletrace.db: modified/uncommitted state present
+- audit/: untracked

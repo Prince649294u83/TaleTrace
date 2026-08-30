@@ -1,0 +1,104 @@
+{
+  "freeze_declaration": "SOFTWARE SHADOW GATE PASS - BASELINE FROZEN",
+  "physical_equivalence_disclaimer": "PHYSICAL EQUIVALENCE: Not established by software shadow tests. Must be measured during Level 4/5 physical testing.",
+  "unmeasured_physical_parameters": [
+    "ESP32-CAM actual pixel dimensions",
+    "ESP32-CAM orientation behavior",
+    "Real-world camera compression effects",
+    "Physical isolated-finger detector behavior",
+    "Physical button electrical/debounce behavior",
+    "OLED visibility/scroll behavior",
+    "Speaker audibility",
+    "TTS + Ambient simultaneous audibility",
+    "Real network latency"
+  ],
+  "timestamp_utc": "2026-08-30T04:11:00Z",
+  "git": {
+    "branch": "Latest-changes-test",
+    "commit_sha": "85e83d3f1e73efc4d6bddc48239d08eafe655b29"
+  },
+  "runtime_environment": {
+    "python_version": "3.12.10",
+    "node_version": "v22.21.0",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "dependency_hashes": {
+    "requirements_txt_sha256": "7b291e31519ee71880eac3c5ab2a4d927eb44ce423242ab1e67013fb56965f25",
+    "package_json_sha256": "1470cafaaf3db48a5d24ee00c99f69993ef20722f6869c9e82182a120b8b1954",
+    "package_lock_json_sha256": "d4d913ce124c1a4edfbc243d312d3e5887916e3edb447eac94f85cef57e9c91f"
+  },
+  "verification_gates": {
+    "shadow_harness": {
+      "expected": 62,
+      "executed": 62,
+      "passed": 62,
+      "skipped": 0,
+      "errored": 0,
+      "status": "PASS"
+    },
+    "adversarial_mutation_suite": {
+      "expected": 6,
+      "executed": 6,
+      "caught": 6,
+      "status": "PASS"
+    },
+    "pytest_backend": {
+      "passed": 822,
+      "failed": 0,
+      "status": "PASS"
+    },
+    "vitest_frontend": {
+      "passed": 11,
+      "failed": 0,
+      "status": "PASS"
+    },
+    "verify_all_gate": "PASSED"
+  },
+  "corpus_file_hashes": {
+    "chapter_title.jpg": "2a0d290887eb64edfced698cb9d0722e8c43afa9d32d74bf7cbc476159286580",
+    "page_11.jpg": "703e3e64a329b958826a02bbb49f1d6567c99b10ce3bba8b2ad5b23b963419a6",
+    "page_12.jpg": "4c4fc14f0ce6944a537c2b3ce27f25de11b1e93d8280cd619e3442b95854da2e",
+    "page_13.jpg": "332ab77c6038ae511038ef1d624577aa2a053dfa7e001700c081b5d7ae5292f0",
+    "page_14.jpg": "3a7feb27748fb24e47a8ff0ae4da3552a9800d0492dc2215246a6689beacaf57",
+    "page_15_graph.jpg": "7a45210426af84effb6f559479edf9b36fbd7a5c079ecb1bc3ff4e5b036be998",
+    "page_16_graph.jpg": "477b87988c02e339ec698fa72dde48ac6d42a2c89e88beca2b3981ddcb6d3809",
+    "page_17_hand.jpg": "376bd9611c5123326c52779831688c062665473f7cf67991e912c3f2d551b2f7",
+    "page_18.jpg": "b61de3a413ce93dfc7326fc55f683e033524d0e4140f1d7f981f17e7e49901de",
+    "page_19.jpg": "1fb57d5f8d38c3268c9bbe75fbc145b07bb11fa8fa8f20d37ffbbce51fca660a"
+  },
+  "audio_asset_hashes": {
+    "attribution.json": "bde1d1b94af3dc3c641f1d9917c943ba7d83f83c5af8891af14c42ef6f29d26e",
+    "battle.mp3": "a297433c174e2a51fc0646e727988caadfbf72b86ba1d72d68f2aab68624b4ef",
+    "castle.mp3": "07f4bd8db32cde2c13e212af13f1bdff277850004a868f5f01c3b0c26b1c1eab",
+    "chase.mp3": "63d959c9578fd51fc696dce390b5ea9ab86f04dedec972b8290ab788e7b743b9",
+    "city.mp3": "883781535457f5472d2604327842178aeff3223ca5a6912c333ef47428430673",
+    "comedy.mp3": "4b55d5f07aa67d6cc2885ba517b1e828ad82f4f9b5f801c378dc9386343e7425",
+    "dungeon.mp3": "915aabbe3409d4cca11da4b421d386658df3e1ef4267c9cdf4af454f777038bf",
+    "fear.mp3": "4a474bf70695a5fbd11a5c88e7c98dc0f8a1ebfc1025c1c4d988ddb61583b32a",
+    "fireplace.mp3": "11e32bdc1f5fecf680b7ba26af3ed4fabea8b35a62464f85e69cf7c08cec4a3f",
+    "forest.mp3": "9fad71bf54ccdff7d243469d959fe4c84b94973502dc5444c2ec64e572a102d0",
+    "joy.mp3": "4b55d5f07aa67d6cc2885ba517b1e828ad82f4f9b5f801c378dc9386343e7425",
+    "library.mp3": "67221c55992c33c8c208d3350d32b3b1d5de78976bbfc1c64a62c911433bfc58",
+    "magic.mp3": "75dbadcf1714f207f6e883feb337bf714fba4dcc402495d7c7ef005225a5e3c8",
+    "manifest.json": "bcd3c0c6f8c13dff7ccd0d75c66f97773a99da067f8ab958b5049b4e7f46a83c",
+    "marketplace.mp3": "21363f4357d1eb3f4266a446d9941989bb861d494d70f65f3ed883d46b3ec1d7",
+    "morning.mp3": "b0b228589cd0c22027b8e87d694d13d29a58fe66832378114182bbd18e38dda8",
+    "mystery.mp3": "154e454aa050e699227616d4ad7f6aad4edd346673fc7c14a053a3bf098412f5",
+    "neutral_narration.mp3": "2e03e73a54de23c91b65348929fc25054c6fa80dc1c0b546f034eda32b68d9bf",
+    "night.mp3": "4d80416a29a469492c8d3a95a446368673526b1928766458a4914e3fc51e3768",
+    "ocean.mp3": "76f13d386e0b8213c5610dde89cf18a52f03119e1b690cdb2837cfcc97fe806e",
+    "peaceful.mp3": "9fad71bf54ccdff7d243469d959fe4c84b94973502dc5444c2ec64e572a102d0",
+    "rain_light.mp3": "c43752d1a26df49affedd93ef1ae9b2eac730ae6fa48884ef2549ab89797db67",
+    "river.mp3": "6385d52e9ffe48cc49e6009b0cf9cc5f9a1631b3a5efafc33ea7bde8795f009c",
+    "snowfall.mp3": "e406ce51e90a6e8d5ca4fcc1d2898fea78fdc6cd9426efef298fdeab37604ee2",
+    "sorrow.mp3": "2e03e73a54de23c91b65348929fc25054c6fa80dc1c0b546f034eda32b68d9bf",
+    "space.mp3": "e189aec4921ebfcd8310866f3197afbe493d427f92b108d307e1d1e04e3184df",
+    "stealth.mp3": "58c1e811218661c8f28f8b83efa3c930d3ea3eb660fe739e11acc95861d1db36",
+    "suspense.mp3": "58c1e811218661c8f28f8b83efa3c930d3ea3eb660fe739e11acc95861d1db36",
+    "tavern.mp3": "735108300b7a1138effe2f068a8f60cef9cde437786be11ee7dd8f0618b77a0b",
+    "test_ambient_obvious.wav": "074f6b3f548fa9ba41b6b88b3db03f34c0f2780d9e70c5589f4ac01a19344636",
+    "thunderstorm.mp3": "74d4e3d3f432811c73ee544d5554ec6e00480ed09467418926b5cb08c6f99fbb",
+    "wind.mp3": "e406ce51e90a6e8d5ca4fcc1d2898fea78fdc6cd9426efef298fdeab37604ee2",
+    "wonder.mp3": "5243d28a24122d9e43c7c15ff856a751feb8d78c7b0f975f1f28db407910c68d"
+  }
+}

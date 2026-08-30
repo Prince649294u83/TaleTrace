@@ -682,7 +682,7 @@ class PlaybackEngine:
                     profile = self._profile
                     voice_id = self._voice_id
 
-                await self._speak(chunk, profile, voice_id)
+                spoken = await self._speak(chunk, profile, voice_id)
 
                 async with self._lock:
                     if self._machine.state is PlaybackState.PAUSED:
@@ -690,20 +690,34 @@ class PlaybackEngine:
                         # counted: pause() requeued it and it will be spoken again.
                         return
 
-                    # Finished uninterrupted, so it counts exactly once.
-                    self._count_spoken(chunk)
+                    if spoken:
+                        # Finished uninterrupted, so it counts exactly once.
+                        self._count_spoken(chunk)
 
-                    if (
-                        self._machine.state is PlaybackState.WAITING_FOR_POINTER
-                        and self._pending_seek is not None
-                    ):
-                        self._pointer.update(self._pending_seek)
-                        self._pending_seek = None
-                        self._machine.transition_to(PlaybackState.PLAYING)
-                    elif self._machine.state is PlaybackState.PLAYING:
-                        self._pointer.advance()
+                        if (
+                            self._machine.state is PlaybackState.WAITING_FOR_POINTER
+                            and self._pending_seek is not None
+                        ):
+                            self._pointer.update(self._pending_seek)
+                            self._pending_seek = None
+                            self._machine.transition_to(PlaybackState.PLAYING)
+                        elif self._machine.state is PlaybackState.PLAYING:
+                            self._pointer.advance()
 
-                    self._current = None
+                        self._current = None
+                    else:
+                        # Synthesis or playback failed: chunk was not heard by reader.
+                        # Keep chunk at head of queue, do not count as spoken, do not advance pointer.
+                        self._queue.push_front(chunk)
+                        self._current = None
+                        self._machine.transition_to(PlaybackState.FINISHED)
+                        self._log(
+                            "synthesis_failed",
+                            pointer=chunk.pointer.sentence_order_key(),
+                            sentence=chunk.text[:40],
+                            error=self._error,
+                        )
+                        return
 
                     if self._machine.state is not PlaybackState.PLAYING:
                         return
@@ -717,8 +731,11 @@ class PlaybackEngine:
 
     async def _speak(
         self, chunk: SentenceChunk, profile: AudioProfile, voice_id: str | None
-    ) -> None:
-        """Synthesize and play one sentence, then honour the profile's pause."""
+    ) -> bool:
+        """Synthesize and play one sentence, then honour the profile's pause.
+
+        Returns True when synthesis and playback succeeded, False on failure.
+        """
 
         response = await self._provider.synthesize(
             SpeechRequest(text=chunk.text, profile=profile, voice_id=voice_id)
@@ -727,14 +744,21 @@ class PlaybackEngine:
         if not response.ok:
             self._error = response.error
             logger.warning("Synthesis failed for %r: %s", chunk.text[:40], response.error)
-            return
+            return False
 
         # Providers that speak directly to the device return no bytes.
         if response.audio:
-            await self._sink.play(response.audio, content_type=response.content_type)
+            try:
+                await self._sink.play(response.audio, content_type=response.content_type)
+            except Exception as e:
+                self._error = f"Audio sink playback failed: {e}"
+                logger.warning("Audio playback failed for %r: %s", chunk.text[:40], e)
+                return False
 
         if profile.pause_after_sentence_ms:
             await asyncio.sleep(profile.pause_after_sentence_ms / 1000)
+
+        return True
 
     # ---------- statistics ----------
 

@@ -43,6 +43,7 @@ import asyncio
 import logging
 import os
 import sys
+from pathlib import Path
 
 from backend.app.core.environment import load_environment
 from backend.app.modules.database.recording import (
@@ -394,7 +395,7 @@ async def _run(args: argparse.Namespace) -> int:
     # Build complete dual-layer audio stack (TTS narration + Ambient background loop)
     ambient_cache = AmbientAssetCache(Path("assets/audio"))
     ambient_provider = LocalAmbientProvider(asset_cache=ambient_cache)
-    scene_controller = SceneController()
+    scene_controller = SceneController(ai=ai)
 
     audio = PlaybackEngine(
         session_id=SESSION_ID,

@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from backend.app.modules.audio_engine.models import ReadingPointer, SceneDecision
+from backend.app.modules.audio_engine.models import PlaybackState, ReadingPointer, SceneDecision
 from backend.app.modules.audio_engine.scene_controller import SceneController, _DEFAULT_SCENE
 
 
@@ -182,3 +182,118 @@ class TestSceneControllerCleanup:
         # The finally block must have cleaned it up
         assert (1, 0) not in controller._in_flight
         assert (1, 0) not in controller._cache
+
+
+class TestPlaybackEngineSceneIntegration:
+    @pytest.mark.asyncio
+    async def test_playback_engine_evaluates_scene_with_ai_bridge(self):
+        from backend.app.modules.audio_engine.playback_engine import PlaybackEngine
+        from backend.app.modules.audio_engine.speech_provider import FakeSpeechProvider, NullAudioSink
+        from backend.app.modules.audio_engine.audio_profiles import NORMAL
+
+        fast_profile = NORMAL
+
+        ai = FakeAiBridge(outcomes=[
+            FakeOutcome(
+                ok=True,
+                data={
+                    "scene_mood": "mystery",
+                    "emotion": "suspense",
+                    "intensity": 0.7,
+                    "audio_tag": "library",
+                }
+            )
+        ])
+        scene_controller = SceneController(ai=ai)
+
+        class MockAmbientProvider:
+            def __init__(self):
+                self.decisions = []
+                self.is_playing = True
+                self.is_paused = False
+                self.is_enabled = True
+                self.current_tag = "neutral_narration"
+                self.current_channel_id = 1
+
+            async def crossfade(self, decision):
+                self.decisions.append(decision)
+                self.current_tag = decision.audio_tag
+
+            async def pause(self):
+                self.is_paused = True
+
+            async def resume(self):
+                self.is_paused = False
+
+            async def stop(self):
+                self.is_playing = False
+
+        ambient = MockAmbientProvider()
+        engine = PlaybackEngine(
+            provider=FakeSpeechProvider(),
+            sink=NullAudioSink(),
+            ambient_provider=ambient,
+            scene_controller=scene_controller,
+        )
+
+        ptr = ReadingPointer(page_index=1, paragraph_index=0, sentence_index=0)
+        await engine.start(pointer=ptr, text="It was a dark and stormy night.", profile=fast_profile)
+        await engine.wait_for_idle()
+
+        # Let the background ambient evaluation settle
+        await asyncio.sleep(0.05)
+
+        assert len(ai.calls) == 1
+        assert ai.calls[0][0] == "It was a dark and stormy night."
+        assert len(ambient.decisions) == 1
+        assert ambient.decisions[0].audio_tag == "library"
+
+    @pytest.mark.asyncio
+    async def test_ambient_ai_failure_does_not_block_or_fail_reading(self):
+        from backend.app.modules.audio_engine.playback_engine import PlaybackEngine
+        from backend.app.modules.audio_engine.speech_provider import FakeSpeechProvider, NullAudioSink
+        from backend.app.modules.audio_engine.audio_profiles import NORMAL
+
+        fast_profile = NORMAL
+
+        ai = FakeAiBridge(delay_seconds=0.05, outcomes=[
+            FakeOutcome(ok=False, data={}, error="Groq API timeout")
+        ])
+        scene_controller = SceneController(ai=ai)
+
+        class MockAmbientProvider:
+            def __init__(self):
+                self.decisions = []
+                self.is_playing = True
+                self.is_paused = False
+                self.is_enabled = True
+                self.current_tag = "neutral_narration"
+
+            async def crossfade(self, decision):
+                self.decisions.append(decision)
+
+            async def pause(self):
+                pass
+
+            async def resume(self):
+                pass
+
+            async def stop(self):
+                pass
+
+        ambient = MockAmbientProvider()
+        engine = PlaybackEngine(
+            provider=FakeSpeechProvider(),
+            sink=NullAudioSink(),
+            ambient_provider=ambient,
+            scene_controller=scene_controller,
+        )
+
+        ptr = ReadingPointer(page_index=1, paragraph_index=0, sentence_index=0)
+        await engine.start(pointer=ptr, text="A simple peaceful sentence.", profile=fast_profile)
+        await engine.wait_for_idle()
+
+        assert engine.get_status().state is PlaybackState.FINISHED
+        assert engine.get_status().statistics.sentences_spoken == 1
+        assert engine.get_status().statistics.words_spoken == 4
+

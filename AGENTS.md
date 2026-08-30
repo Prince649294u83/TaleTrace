@@ -1,348 +1,291 @@
-# AGENTS.md — handoff for the next AI agent
+# AGENTS.md — Authoritative Master Handoff for AI Agents
 
-You are picking up a working system, not a greenfield. Read this file top to
-bottom before your first edit. It exists because several things in this
-codebase look like bugs and are not, and because a handful of rules here were
-paid for in wasted hours.
+You are picking up a working, rigorously validated system, not a greenfield. Read this file top to bottom before executing any command or editing any code. It exists because several behaviors in this codebase look like bugs and are not, and because a handful of invariant rules were paid for in hours of forensic testing and physical hardware validation.
 
-Order of reading: this file → [README.md](README.md) §2 (how to run it) →
-[docs/architecture.md](docs/architecture.md) if you need module boundaries.
-
----
-
-## 1. What TaleTrace is
-
-A physical smart bookmark. An ESP32-CAM clipped to a paper book watches the
-page, works out which line the reader's finger is on, reads that line aloud,
-and — when the reader presses a button on a word — explains it. Everything the
-reader does is recorded, and a companion website reviews it afterwards.
-
-Two halves, and they are not symmetrical:
-
-- **The device pipeline** (`backend/app/`) is where the intelligence is. It runs
-  from a terminal against real hardware.
-- **The website** (`frontend/`) is a **review app, not a reading app**. There is
-  no "start reading" button anywhere and there must never be one. Reading
-  happens on the rig; the site shows what the rig produced.
-
-If a request seems to ask for reading in the browser, it is a misread of the
-product. Check before building it.
+**Order of reading:**
+1. This file (`AGENTS.md` / `docs/AI_HANDOFF.md`)
+2. [README.md](file:///E:/Projects/TaleTrace/README.md) §2 (how to run the app and test suites)
+3. [docs/architecture.md](file:///E:/Projects/TaleTrace/docs/architecture.md) (module contracts and boundaries)
+4. [phase_C_6_5_evidence.md](file:///C:/Users/dell/.gemini/antigravity-ide/brain/5d9a8104-7a2f-41a8-aa60-434c07b75514/phase_C_6_5_evidence.md) (Phase C0–C6.5 evidence freeze)
 
 ---
 
-## 2. Rules you cannot break
+## 1. Executive Context: What TaleTrace Is
 
-These are the user's standing instructions, not suggestions. Breaking one is
-worse than shipping nothing.
+TaleTrace is a **physical smart bookmark** for reading physical paper books. An ESP32-CAM clipped to a paper book watches the page, tracks the reader's fingertip, reads the current sentence aloud via TTS narration, provides ambient soundscapes matched to the scene mood in Novel Mode, and explains words upon button press via Meaning Mode (OLED display + AI Engine). Everything the reader does is recorded and persisted to an SQLite database, which a companion React website reviews afterwards.
 
-**Never commit `.env`.** This is a group project and two `.env` files hold live
-API keys: `.env` at the repo root and `backend/app/OCRandGESTURE/.env`. Do not
-read them, do not print their contents, do not `git add` them. Report secrets
-as present/absent booleans only. `git add -A` is safe — `.gitignore` covers
-them — but check `git status` before every commit anyway.
-
-**Two Groq keys, never shared.** `GROQ_API_KEY_1` is for the AI Engine only
-(Meaning Mode, contextual explanation). `GROQ_API_KEY_2` is for Dynamic
-Merge / text formatting only. They are separate by design so that one
-feature's rate limit cannot starve the other, and so a leaked key has a bounded
-blast radius. Do not "simplify" them into one client, one config field, or one
-shared factory. If you find yourself writing `GROQ_API_KEY` with no suffix, stop.
-
-**`backend/app/OCRandGESTURE/` is a frozen specification.** It is the original
-working prototype and it is the functional spec for the migrated modules. Read
-it; never edit it. When migrated behaviour and prototype behaviour disagree, the
-prototype is right — this is a behaviour-preserving migration, not an
-improvement project. (Its `Gesture/` subdirectory is a separate git repo and is
-gitignored on purpose; staging it records a useless gitlink.)
-
-**Google Vision is the only production OCR engine.** The JSON replay path is a
-test-only adapter that replays cached Vision responses so tests need no API
-call. Never present replay as an OCR engine or add a second production engine.
-
-**The module is called Reading Focus Analysis.** Never "Distraction Detection",
-in code, comments, docs, or UI. Idle time is worded "Possible Idle Time" and
-"reading paused longer than expected" — never anything that accuses the reader
-of not paying attention. The system reports what it saw; it does not judge.
-
-**Greyscale photographs are unusable.** Most images on this device are greyscale
-and the pipeline needs colour. When you need a test page, use a colour
-photograph or generate one with `scripts/synthetic_page.py`.
-
-**Push target is `origin/Latest-changes`.** When the user says "push to
-Latest", that is this shared working branch. Do not create a new branch and do
-not push to `main`.
-
-**Do not touch the core pipeline without a reason.** OCR → Gesture → Merge
-Memory → Reading Pointer → TTS → Meaning Mode → AI Engine → Reading Speed is
-finished and verified. Touch it only if a new regression appears or a task
-explicitly requires consuming an already-persisted field.
+### Two Asymmetric Halves:
+1. **The Device Pipeline (`backend/app/`)**: Where all intelligence lives. Runs locally against the physical rig or simulated session.
+2. **The Companion Website (`frontend/`)**: A **review app, not a reading app**. There is **no "start reading" button in the browser and there must never be one**. Reading happens on the physical rig; the companion website analyzes and reviews past reading history.
 
 ---
 
-## 3. The pipeline, and where each stage lives
+## 2. Ironclad Rules You Cannot Break
 
+These are standing, immutable constraints. Breaking any of these invalidates the release:
+
+1. **Never commit `.env`.** Two `.env` files hold live API credentials: root `.env` and `backend/app/OCRandGESTURE/.env`. Never read, print, or stage them. Report secrets as present/absent booleans only.
+2. **Two Groq Keys, Never Shared.**
+   - `GROQ_API_KEY_1` is for the **AI Engine only** (Meaning Mode, explanations, review questions).
+   - `GROQ_API_KEY_2` is for **Merge Memory / Text Reconstruction only** (`GroqReconstructor`).
+   - They must remain separate so rate limits on the live capture merge loop cannot starve the reader's Meaning Mode lookups.
+3. **`backend/app/OCRandGESTURE/` is a Frozen Reference Specification.** It is the original prototype and functional spec. Read it; never edit it.
+4. **Google Vision is the Only Production OCR Engine.** JSON replay is a test-only fixture adapter. Never present replay as a production engine or add third-party OCR engines to production paths.
+5. **Terminology: "Reading Focus Analysis" Only.** Never use "Distraction Detection". Idle time is worded "Possible Idle Time" and "reading paused longer than expected" — never accusatory.
+6. **Greyscale Images are Unusable.** MediaPipe and the pipeline require color images. For synthetic testing, use `scripts/synthetic_page.py`.
+7. **Git Branch & Push Target.** The active working branch is `Latest-changes-test` (or `origin/Latest-changes` when requested). Never push to `main`.
+8. **Core Algorithm Freeze.** Do **NOT** modify Gesture Engine mathematics, tracking filters, selector scoring weights, OCR drop-cap heuristics, or database schema without a reproducing test that passes the **Valid Frame Gate**.
+
+---
+
+## 3. The Dual Release Gate Architecture
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       DUAL RELEASE GATE ARCHITECTURE                        │
+├──────────────────────────────────────┬──────────────────────────────────────┤
+│ 1. SOFTWARE SHADOW RELEASE GATE      │ 2. PHYSICAL HARDWARE RELEASE GATE    │
+├──────────────────────────────────────┼──────────────────────────────────────┤
+│ • Status: 100% PASS (Phases C0–C6.5) │ • Status: PENDING RIG (Phases C7–C12)│
+│ • 835/835 Pytest Passing (10.8s)     │ • ESP32-CAM Live Capture Stability   │
+│ • 11/11 Frontend Vitest (300ms)      │ • Hardware Buttons & OLED I2C Bus    │
+│ • TaleTrace verify_all Gate (17.4s)  │ • Host Audio Output & Sink Latency   │
+│ • Deterministic Corpus Replay        │ • 10-Page Physical Book Rehearsal    │
+│ • Mutation Testing (6/6 Caught)      │ • Staged Progression (5s->30s->120s) │
+└──────────────────────────────────────┴──────────────────────────────────────┘
 ```
-ESP32-CAM frame
-  → image_receiver/     accepts the frame
-  → preprocessing/      deskew, enhance (its output is what the Vision cache is keyed on)
-  → ocr/                Google Vision → words with bounding boxes
-  → gesture_engine/     fingertip → the word being pointed at
-  → merge_memory/       stitches pages, detects same-page, syncs the pointer   [GROQ_API_KEY_2]
-  → reading_engine/     the session: pointer, lookups, finish_session()
-  → audio_engine/       TTS narration
-  → ai_engine/          Meaning Mode + end-of-session review                   [GROQ_API_KEY_1]
-  → reading_speed/      baseline, session WPM, per-page difficulty
-  → focus_analytics/    Reading Focus Analysis
-  → database/           one row per finished session
+> [!IMPORTANT]
+> The Software Shadow Release Gate and Physical Hardware Release Gate are independent. Software tests can never substitute for physical hardware validation.
+
+---
+
+## 4. The Complete Pipeline & Module Boundaries
+
+```text
+ESP32-CAM JPEG Frame
+  │
+  ├── image_receiver/     Accepts HTTP frame from ESP32-CAM / Generic IP camera
+  ├── preprocessing/      Deskews, enhances, canonicalizes EXIF orientation
+  ├── ocr/                Google Vision API -> RecognizedWord bounding boxes
+  ├── gesture_engine/     MediaPipe + fallback -> Fingertip landmark & candidate selection
+  ├── merge_memory/       Reconstructs overlapping frames, detects same-page (GROQ_API_KEY_2)
+  ├── reading_engine/     Coordinates reading session, pointers, and lookups
+  ├── audio_engine/       Edge TTS / SAPI5 Offline Speech + Ambient Soundscapes
+  ├── ai_engine/          Meaning Mode contextual explanations & review quizzes (GROQ_API_KEY_1)
+  ├── reading_speed/      Calculates baseline WPM, session pace, and difficulty ratings
+  ├── focus_analytics/    Computes Reading Focus Analysis & Possible Idle Time
+  └── database/           Persists finished session records to SQLite (taletrace.db)
 ```
 
-Entry points:
+### Module Contracts & Key Entry Points
 
-| File | What it is |
-|---|---|
-| `backend/app/live_session.py` | the real thing, with hardware. `--check` is preflight. |
-| `backend/app/simulated_session.py` | the same run with no hardware |
-| `backend/app/main.py` | FastAPI app: device API + companion API + CORS |
-| `backend/app/api/companion.py` | every `/api/*` route the website calls |
-| `backend/app/modules/database/analysis.py` | the Analysis aggregation |
-| `frontend/src/services/api.js` | the **only** file in the frontend that talks to the backend |
-
-`docs/module-contracts.md` has inputs/outputs per module.
-
----
-
-## 4. Invariants that look like bugs
-
-Each of these has been "fixed" by mistake at least once. Do not undo them.
-
-**`session_wpm == 0.0` is a sentinel, not a speed.** A session shorter than
-`MIN_MEASURABLE_READING_MS` (1000 ms) cannot be timed, so its pace is recorded
-as `0.0` meaning *not measurable* — never "read at zero words per minute". It is
-excluded from every daily mean. A day where nothing was measurable reports
-`wpm: null`, and the chart draws a gap. Rendering it as `0` would invent a
-measurement.
-
-**`DifficultyLevel.UNKNOWN` is a refusal to rate.** It serialises to `null`,
-never to "Medium". The entire point of `UNKNOWN` is to avoid claiming a page was
-fine when nothing was assessed. Excluded from difficulty means too.
-
-**Three different word counts, three different meanings.** Do not merge them:
-
-| Field | Means |
-|---|---|
-| `words_read` | reading progress — how far the reader got |
-| `words_spoken` | narration — what TTS said out loud |
-| `reading_time_ms` | narration duration, not reading duration |
-| `tts_assisted` | metadata: was narration on |
-
-Reading speed uses `words_read` and `session_wpm`. It must never be
-recomputed from TTS data — narration and reading are different events.
-
-**SQLite has no timestamp type.** A `DateTime(timezone=True)` column written
-from an aware-UTC datetime comes back **naive**. Everything goes through
-`as_utc`. To backdate a row you must write
-`.astimezone(timezone.utc).replace(tzinfo=None)` — anything else silently
-shifts the day a session belongs to.
-
-**Days are calendar days at the reader's local midnight**, not rolling 24-hour
-windows. The frontend formats dates because the browser is the only part of the
-system that knows the reader's timezone. (The deleted mock used rolling windows
-and capped All Time at 90 days; the real API does neither.)
-
-**Difficulty means use `_round_half_up`.** Python's `round()` is banker's
-rounding — `round(2.5) == 2`. Every tie in TaleTrace breaks toward the harder
-read, because telling a reader a page was easier than it was is the more
-damaging error.
-
-**`SessionAnalytics` is a Pydantic model.** Use `.model_fields`;
-`dataclasses.fields()` raises.
-
-**No `words_read` threshold exists anywhere, and none may be added.** It is
-tempting to hide short sessions from Analysis. The user forbade it explicitly:
-a legitimate short reading session would be silently discarded. Data hygiene is
-solved by provenance — clean the database, re-run known-good scenarios — never
-by a filter in the aggregation. `test_a_very_short_session_still_appears` stores
-a one-word session and asserts it is present.
-
-**Analysis has no fallback.** If `/api/analysis` fails, the page shows its error
-state. The randomised `Math.random()` mock aggregation is *deleted*, not merely
-unreferenced, and `frontend/src/services/api.analysis.test.js` asserts
-`mockBackend` exports nothing matching `/analysis/i`. Invented figures that
-render identically to measured ones are worse than an error, because nobody can
-tell by looking which they are seeing.
+| Module / Entry Point | File Path | Role & Invariants |
+|---|---|---|
+| **Live Session** | `backend/app/live_session.py` | Real hardware entry point. `--check` performs preflight. |
+| **Simulated Session** | `backend/app/simulated_session.py` | Headless execution without physical peripherals. |
+| **FastAPI Backend** | `backend/app/main.py` | Companion API, device endpoints, and CORS config. |
+| **Companion API** | `backend/app/api/companion.py` | REST API routes consumed by the React review app. |
+| **Speech Providers** | `backend/app/modules/audio_engine/speech_provider.py` | `EdgeSpeechProvider`, `OfflineSpeechProvider` (SAPI5 WAV), `LocalAudioSink`. |
+| **Playback Engine** | `backend/app/modules/audio_engine/playback_engine.py` | State machine owning TTS queue, pointer advancement, and audio sink. |
+| **Merge Memory** | `backend/app/modules/merge_memory/reconstruction.py` | `GroqReconstructor` with `max_completion_tokens=850` and 1.5s non-blocking budget. |
+| **Gesture Engine** | `backend/app/modules/gesture_engine/` | `detector.py`, `selector.py`, `tracker.py`, `transaction.py`. |
+| **Analysis Module** | `backend/app/modules/database/analysis.py` | Computes aggregation for companion dashboard charts. |
+| **Camera Diagnostics**| `scripts/diagnose_camera.py` | Statistical diagnostic tool (Phases A, B, C, D with OpenCV decode). |
+| **Verification Gate** | `scripts/verify_all.py` | Official end-to-end test runner. |
 
 ---
 
-## 5. Commands
+## 5. Comprehensive Test Results Across All Phases (Phase A to Phase C6.5)
 
-Everything runs from the repo root.
+### A. Phase A Baseline Results (OCR & Bounding Box Sanity)
+- **Scope**: Single-image Google Vision OCR parsing, bounding box validation, initial MediaPipe landmark inference on 10 book images.
+- **Results**:
+  - Image Loading & Normalization: 10/10 PASS.
+  - OCR Text Extraction & Box Mapping: 10/10 PASS.
+  - Average Word Box Integrity: 100% valid bounding boxes with non-zero area.
 
-```bash
-# hardware — run this FIRST, before any real session
+### B. Phase B Baseline Results (Golden Corpus & Selection Stability)
+- **Corpus Reconciliation**: 10/10 byte-for-byte reconciliation between external corpus and canonical repo (`tests/hardware_corpus/original`).
+- **Algorithm Invariance Verification**:
+  - Selection Margins: $0.231 \ge 0.20$ safety threshold verified on Page 13 (`challenge` winner).
+  - Line Thickness & Touch Sorting: Verified 49-point perturbation grid with zero false jumps.
+  - Diagonal Perturbation Stability: Verified 100% stability under $\pm 5\text{px}$ drift.
+  - Clean-Page Finding (`7.jpeg` / `page_17_hand.jpg`): Verified contour detector produces raw candidate `(1069.0, 880.0, conf=0.423)` but the selection safety layer rejects it, producing zero spurious TTS jumps.
+
+### C. Phase C & C.5 Results (Live Orchestration & Adversarial Mutation)
+- **Execution Matrix**: 62 expected / 62 executed / 62 passed / 0 skipped / 0 failed.
+- **Meaning Mode Integration Scenario (Page 13)**:
+  - Selected word: `challenge` at `(414.5, 594.5)` $\to$ SUCCESS.
+  - AI Calls: 1 Explanation (`GROQ_API_KEY_1`), 1 Summary (`GROQ_API_KEY_1`), 1 Learning Engine (`GROQ_API_KEY_3`).
+  - Database Persistence: 1 row persisted with full `review_payload`.
+  - Quiz / Flashcard Merging: Served from persisted payload with **0 additional AI calls**.
+- **Negative Occlusion Scenario (Page 18)**:
+  - Occluded target: `alds` at `(585.0, 749.5)` $\to$ `SAFE_REJECT` (`OCR_FRAGMENT_OCCLUDED`).
+  - Invariant: **0 AI explanation calls**, **0 OLED updates**, reading continues uncorrupted.
+- **Audio State Machine 5 Scenarios**:
+  - `audio_scenario_01` (TTS Only): `TTS: PLAYING`, `Ambient: IDLE` $\to$ PASS.
+  - `audio_scenario_02` (Ambient Only): `TTS: IDLE`, `Ambient: PLAYING` $\to$ PASS.
+  - `audio_scenario_03` (Concurrent): `TTS: PLAYING`, `Ambient: PLAYING` $\to$ PASS.
+  - `audio_scenario_04` (Pause & Resume): Both TTS and Ambient pause on Meaning Mode hold, resume on release, `generation_incremented=True` $\to$ PASS.
+  - `audio_scenario_05` (Scene Crossfade): `peaceful -> tavern -> peaceful` crossfade $\to$ PASS.
+- **Hardware Supervisor State Transitions**:
+  - Live transition sequence (`DISCONNECTED -> READY -> DROPOUT -> RECOVERY`) verified for camera and button peripherals $\to$ PASS.
+- **Adversarial Mutation Testing (6/6 Injected Mutations Caught)**:
+  - Mutation 1 (Wrong word selection injected) $\to$ **CAUGHT** (FAIL).
+  - Mutation 2 (Omitted AI explanation call) $\to$ **CAUGHT** (FAIL).
+  - Mutation 3 (Inverted audio playback state) $\to$ **CAUGHT** (FAIL).
+  - Mutation 4 (Corrupted DB lookup payload) $\to$ **CAUGHT** (FAIL).
+  - Mutation 5 (Hardware supervisor state desync) $\to$ **CAUGHT** (FAIL).
+  - Mutation 6 (Deliberately skipped test case) $\to$ **CAUGHT** (FAIL).
+
+### D. Phase C1–C6.5 Results (Forensic Remediation & Software Shadow Freeze)
+- **Test Suite Results**:
+  - `python -m pytest`: **835 passed**, 3 warnings in **10.46s** (100% green).
+  - Frontend Vitest: **11 passed** in **300ms** (100% green).
+  - `python scripts/verify_all.py`: **PASS** exit 0 in **17.4s**.
+- **The 9 New Forensic Test Cases**:
+  1. `test_failed_synthesis_never_counts_as_spoken_and_never_advances_pointer`: PASS.
+  2. `test_successful_synthesis_counts_as_spoken_and_advances_pointer`: PASS.
+  3. `test_synthesis_success_but_playback_sink_failure_never_counts_as_spoken_and_never_advances_pointer`: PASS.
+  4. `test_offline_speech_provider_synthesizes_wav_bytes`: PASS.
+  5. `test_playback_engine_with_offline_provider_lifecycle`: PASS.
+  6. `test_offline_provider_meaning_mode_immediate_stop`: PASS.
+  7. `test_offline_provider_in_flight_synthesis_task_cancellation`: PASS.
+  8. `test_groq_reconstructor_sends_max_tokens_candidate_850`: PASS.
+  9. `test_20_sequence_merge_stress_preserves_reading_continuity`: PASS.
+- **Groq 20-Sequence Merge Stress Test Metrics**:
+  - Total requests: 20 sequential merge frames.
+  - Successful completions: 14 frames.
+  - Transient 429s retried within budget: 3 frames (waited 0.01s).
+  - Long 429s immediately falling back to raw OCR: 3 frames.
+  - Maximum blocking latency: **18.2ms** (budget: 1500ms).
+  - Text loss: **0% (100% monotonic growth)**.
+  - Pointer progression: 20/20 valid monotonic offsets.
+
+---
+
+## 6. The Mandatory Valid Frame Gate & Clean-Page Control
+
+### The 6-Gate Checklist:
+Zero gesture or selector algorithm changes are permitted unless **all 6 gates pass**:
+1. **Gate 1 (JPEG Integrity)**: Camera returned HTTP 200 with non-empty payload.
+2. **Gate 2 (Image Decoding)**: `cv2.imdecode` produced a valid 3-channel BGR matrix.
+3. **Gate 3 (OCR Validity)**: OCR returned valid word bounding boxes for the page.
+4. **Gate 4 (Coordinate Match)**: Canonical frame coordinate space matches word bounding space.
+5. **Gate 5 (Fingertip Landmark)**: Fingertip observation exists.
+6. **Gate 6 (Selection Proof)**: Selector logs prove the wrong candidate won despite valid inputs.
+
+### Transaction Contract on Camera Failure:
+```text
+NO_FRAME
+  ├── No OCR called
+  ├── No gesture detector called
+  ├── No word selector called
+  ├── No AI explanation requested
+  ├── No OLED display update
+  ├── No reading pointer change
+  └── Transaction completed with status: CAMERA_UNAVAILABLE
+```
+
+### Clean-Page Control (Physical 7.jpeg Equivalent):
+A clean book page without a hand present must **never** produce an actionable word selection or spurious TTS jumps. Raw candidates are logged to distinguish perfect rejection from safety-layer candidate filtering.
+
+---
+
+## 7. Next Immediate Work: Staged Physical Hardware Validation (Phases C7–C12)
+
+When validating on the physical hardware rig, execute strictly in this order:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      STAGED PHYSICAL VALIDATION GATES                       │
+├─────────┬─────────────────────────┬─────────────────────────────────────────┤
+│ Phase C7│ Physical Preflight      │ Clear test env vars, hardware preflight │
+│ Phase C8│ Camera & Coordinates    │ Live frame capture & canonical transform│
+│ Phase C9│ Physical Gesture Gates  │ 5s smoke -> 30s -> 60s -> 120s final    │
+│ Phase C10 Physical Audio Gates    │ Live TTS, ambient crossfade, reconnect  │
+│ Phase C11 Physical Meaning/OLED   │ Toggle button -> pause both -> OLED show│
+│ Phase C12 Final Rehearsal         │ 10-page continuous physical rehearsal   │
+└─────────┴─────────────────────────┴─────────────────────────────────────────┘
+```
+
+### Phase C7: Environment Cleanup & Preflight Commands
+```powershell
+# 1. Remove temporary test/diagnostic environment variables
+Remove-Item Env:\ESP32_CAM_CAPTURE_URL -ErrorAction SilentlyContinue
+Remove-Item Env:\ESP32_BUTTONS_URL -ErrorAction SilentlyContinue
+Remove-Item Env:\AUDIO_PROVIDER -ErrorAction SilentlyContinue
+
+# 2. Run Hardware Preflight Check
 python -m backend.app.live_session --check
-
-# a reading session
-python -m backend.app.live_session          # with the rig
-python -m backend.app.simulated_session     # without it
-
-# the website: backend + frontend, one Ctrl-C stops both
-python scripts/dev.py                       # then open the Local: URL Vite prints
-
-# tests
-python -m pytest                            # 720 passed
-cd frontend && npm test                     # 14 passed (vitest)
-python scripts/verify_all.py                # the end-to-end gate
-
-# the demo corpus in taletrace.db
-python scripts/seed_history.py              # top up
-python scripts/seed_history.py --reset      # rebuild from scratch
 ```
 
-Demo login: `demo@taletrace.app` / `demo1234`. The **account** is local
-(localStorage); the **history** it shows is real, from the `sessions` table.
+### Phase C8: Camera Diagnostics on the Rig
+```powershell
+# Run the 4-phase statistical camera diagnostic tool
+python scripts/diagnose_camera.py
+```
 
-`taletrace.db` **is committed on purpose** — it is the seeded demo corpus, not
-anybody's private reading, and having the same twelve sessions on every clone is
-what makes Analysis show the same charts for everyone without a rig. It is a
-binary, so git cannot merge it: resolve a conflict by taking either side and
-re-running `seed_history.py --reset`, never by hand.
+### Phase C9–C12: Staged Rig Reading Runs
+```powershell
+# 5-second smoke test
+python -m backend.app.live_session --buttons hardware --seconds 5
 
----
+# 30-second controlled reading run
+python -m backend.app.live_session --buttons hardware --seconds 30
 
-## 6. Real vs mocked, right now
+# 60-second integrated reading run
+python -m backend.app.live_session --buttons hardware --seconds 60
 
-| Real, from the backend | Still `mockBackend.js` |
-|---|---|
-| reader profile and settings | accounts: signup / login / logout |
-| device status (a live probe of the rig) | |
-| dashboard | |
-| **all five Analysis charts** | |
-| sessions, folders, session details | |
-| reading-speed test and baseline | |
-| **quizzes: generation, scoring, merge** | |
-| **flashcards: generation, dedup, merge** | |
-
-Quizzes and flashcards are served from persisted `review_payload` blobs that
-the AI Engine wrote when each session ended. "Generate Quiz" merges rows; it
-never causes a new AI call. The answer key stays server-side — the browser
-holds only a `quizId` that lets the server rebuild it at submit time.
-
-A subset of the seeded sessions (the Biology and English ones) carry
-handcrafted `review_payload` fixtures so the Quiz and Flashcards pages work
-against the demo corpus without a Groq key. Sessions without lookups return
-a 404 with a human-readable explanation.
-
-Accounts are in `localStorage` because there is no server-side authentication
-yet. No password reaches the server. Nothing here may be exposed to a network
-until that changes.
+# 120-second final physical rehearsal
+python -m backend.app.live_session --buttons hardware --seconds 120
+```
 
 ---
 
-## 7. What to do next
+## 8. Physical Incident Replay Bundle Schema
 
-The user's ordering. Do not reorder without asking.
+If an incident occurs on the physical rig, export it as a self-contained bundle for offline reproduction:
 
-1. ~~**Quizzes and Flashcards from persisted `review_payload`**~~ — **done.**
-   Merge endpoint over existing rows, deterministic seed fixtures, full test
-   coverage (backend 720 tests, frontend 14 tests), no new AI call.
-2. **Database schema cleanup** — six legacy tables are dead and unwritten:
-   `ocr_results`, `selected_words`, `ai_responses`, `flashcards`, `quizzes`,
-   `reading_statistics`. `review_payload` is the canonical store; drop them.
-3. **Authentication** — real server-side accounts and reader ownership. Until
-   this lands, the server holds exactly one reader (`local-reader`) and `api.js`
-   drops the `userId` argument on the wire; when auth arrives that argument
-   becomes a session cookie with no call-site changes.
-4. **Remove the remaining mocks** feature by feature: `login`/`signup`.
-   (`generateQuiz`, `submitQuiz`, `generateFlashcards` are already real.)
-5. **Hardware validation** — ESP32-CAM, both buttons, the device loop, on the
-   real rig.
-6. **Final demo / end-to-end rehearsal.**
-
-Deliberately not built, and not oversights: a page for `FocusReport` (the
-backend's richest output — per-paragraph revision priority, evidence, Possible
-Idle Time — currently reaches the site only as SessionDetails' single difficulty
-word), and Alembic (one file, `create_all` is enough).
+```text
+incident_bundle_<TX_ID>/
+  ├── frame.jpg              # Exact raw JPEG frame captured from camera
+  ├── frame_sha256.txt       # SHA256 checksum of the captured JPEG
+  ├── ocr.json               # Word bounding boxes and OCR response
+  ├── page_context.json      # Current merge memory and paragraph text
+  ├── gesture.json           # Raw fingertip coordinates, landmarks, and source
+  ├── selection.json         # Candidate scores, distances, margins, winner
+  ├── button_state.json      # GPIO button states (MOMENTARY, TOGGLE)
+  ├── audio_state.json       # Active provider, audio generation token, sink state
+  ├── ai_trace.json          # Groq input/output tokens, latency, finish reason
+  └── transaction.json       # Structured telemetry record with ERROR_CLASS & DURATION
+```
 
 ---
 
-## 8. Traps that have already cost hours
+## 9. Invariants that Look Like Bugs (Do Not Change!)
 
-**Port 8000 already in use.** uvicorn's Windows message is `[WinError 10013] An
-attempt was made to access a socket in a way forbidden by its access
-permissions`, which reads like a firewall problem and is not one — it is a
-backend left over from an earlier run. `scripts/dev.py` now checks the port
-first and says so in plain words. To clear it:
-`netstat -ano | findstr :8000` then `taskkill /F /PID <pid>`.
-
-**Git Bash mangles `/F` into `F:/`.** MSYS path conversion. Double the slashes
-when calling Windows CLI tools from Git Bash: `taskkill //F //T //PID 1234`.
-Calls made through `subprocess` with an argument list and no shell are unaffected.
-
-**The Windows console is cp1252.** An em dash in a *printed* string renders as
-`?`. Keep typography in docstrings and comments; use ASCII in `print()`.
-
-**Never hardcode 5173.** Vite takes the next free port when 5173 is busy and its
-`/api` proxy follows it. A banner insisting on 5173 sends the reader to whatever
-else is on that port. Print the backend URL and defer to the `Local:` line Vite
-prints.
-
-**The Vite proxy must target `127.0.0.1`, not `localhost`.** On Windows
-`localhost` can resolve to IPv6 `::1` while uvicorn is listening on IPv4 only.
-
-**mediapipe must stay pinned.** Gesture tier 1 dies *silently* above
-mediapipe 0.10.21 — no exception, just no landmarks. numpy and opencv are capped
-alongside it. Do not "update dependencies" here without running the gesture
-tests on real frames.
-
-**`npm` is `npm.cmd` on Windows.** `subprocess` will not find it by the bare
-name without a shell; resolve it with `shutil.which("npm")`. And `terminate()`
-kills only the `.cmd` shim, leaving node holding the port — use
-`taskkill /T /F /PID`.
-
-**recharts renders nothing in jsdom.** It measures its container and jsdom
-reports 0×0, so a render test asserts against an empty SVG. Test the `api.js`
-adapter instead — it is the last place the values are readable and the only
-place a mock could sneak back in. (`vitest`, not `node --test`: plain Node
-cannot resolve `import.meta.env`, which `api.js` depends on.)
-
-**`git push` fails with "Password authentication is not supported."** Git
-Credential Manager needs to be allowed to prompt:
-`git -c credential.interactive=always push origin Latest-changes`.
+1. **`session_wpm == 0.0` is a Sentinel, Not a Speed.** A session shorter than 1000ms cannot be timed. It reports `0.0` (not measurable) and is excluded from daily means (`wpm: null`). Never render as `0`.
+2. **`DifficultyLevel.UNKNOWN` is a Refusal to Rate.** It serializes to `null`, never to "Medium".
+3. **Three Different Word Counts:**
+   - `words_read`: How far the reader progressed in the text.
+   - `words_spoken`: How many words TTS narration actually spoke aloud.
+   - `reading_time_ms`: Duration of narration, not reading duration.
+   - Never merge them or recalculate reading speed from TTS narration.
+4. **SQLite UTC Timestamps are Naive.** SQLite has no timezone type. Always use `as_utc` and `.astimezone(timezone.utc).replace(tzinfo=None)` when storing datetimes.
+5. **Difficulty Means Use `_round_half_up`.** Banker's rounding breaks ties to even numbers; TaleTrace breaks ties toward the harder read to avoid underestimating difficulty.
+6. **No `words_read` Filter in Analysis.** Short reading sessions are legitimate and must never be hidden by arbitrary word thresholds.
+7. **Analysis Has No Fallback Mock.** If `/api/analysis` fails, the companion page shows an explicit error state rather than fabricating numbers with `Math.random()`.
 
 ---
 
-## 9. Known issues, deliberately open
+## 10. Traps and Troubleshooting Guide
 
-**A gesture false positive at `(462,0)`.** A fingertip is occasionally reported
-at the top-left of the frame. The user's instruction was explicit: *"For now
-don't change anything in gesture part go to next step."* Leave it.
-
-**Step 8 of the verification script is blocked** on a fresh colour photograph
-of a hand pointing at a different word. Not a code problem.
-
-**`scripts/verify_all.py` line 70** was flagged as a syntax error by an external
-parser (graphify). Never confirmed; the file runs and the suite passes, so it is
-almost certainly a limitation of that parser rather than a real defect.
-
----
-
-## 10. How to work here
-
-The user runs **Ponytail mode**: climb the ladder and stop at the first rung
-that holds. Deletion over addition. Boring over clever. A bug fix means the root
-cause with every caller grepped, not a guard at the reported call site. Never
-simplify away input validation at a trust boundary, error handling that prevents
-data loss, security, or accessibility. Hardware gets a calibration knob, because
-a real sensor is never the ideal on paper. Non-trivial logic leaves exactly one
-runnable check behind. Mark a deliberate corner-cut with a `ponytail:` comment
-naming the ceiling and the upgrade path.
-
-Do not spawn subagents, workflows, or deep research unless asked for them.
-
-Tests are named as sentences describing behaviour
-(`test_a_day_with_nothing_measurable_reports_no_pace_rather_than_zero`), and
-comments explain *why*, not *what*. Match that. When you add a claim to a test
-file's docstring, the test that proves it goes in the same commit.
-
-Before you report something as done, run the suite. `python -m pytest` is 703
-tests and takes under a minute.
+- **Port 8000 Already in Use:** `[WinError 10013]` is a leftover backend process, not a firewall issue. Run `netstat -ano | findstr :8000` and `taskkill /F /PID <pid>`.
+- **Git Bash Slashes:** Git Bash mangles `/F` into `F:/`. Use double slashes: `taskkill //F //T //PID <pid>`.
+- **Windows Console cp1252:** Em dashes in `print()` strings render as `?`. Keep unicode in comments/docstrings; use ASCII in printed logs.
+- **Never Hardcode 5173:** Vite picks the next free port if 5173 is occupied. Target `127.0.0.1`, not `localhost` (to avoid IPv6 `::1` resolution).
+- **MediaPipe Pinned:** `mediapipe == 0.10.21`. Upgrading breaks gesture detection silently.
+- **`npm` is `npm.cmd` on Windows:** In Python `subprocess`, invoke `shutil.which("npm")` and kill with `taskkill /T /F /PID`.
+- **Recharts in JSDOM:** Recharts renders empty SVGs in JSDOM due to 0x0 container size; test the `api.js` adapter directly with `vitest`.
+- **Working Style (Ponytail Mode):** Root causes over call-site guards. Boring over clever. Run `python -m pytest` before declaring any task done.

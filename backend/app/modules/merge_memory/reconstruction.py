@@ -93,6 +93,29 @@ def pointer_offset(old_text: str, merged_text: str) -> int:
     return match.b + match.size
 
 
+MAX_MERGE_BLOCKING_BUDGET = 1.5  # Max total seconds permitted for merge synchronization
+
+
+def _extract_retry_after(error: Exception) -> float | None:
+    """Extract retry delay from 429 response headers or error message."""
+    response = getattr(error, "response", None)
+    if response is not None and hasattr(response, "headers"):
+        header = response.headers.get("retry-after") or response.headers.get("Retry-After")
+        if header:
+            try:
+                return float(header)
+            except ValueError:
+                pass
+    import re
+    m = re.search(r"try again in ([0-9\.]+)s", str(error).lower())
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            pass
+    return None
+
+
 class GroqReconstructor:
     """The `reconstruct` callable Merge Memory accepts, backed by Groq.
 
@@ -150,6 +173,7 @@ class GroqReconstructor:
         Signature is `(str, str) -> str` because that is what
         `MergeMemory(reconstruct=...)` already expects.
         """
+        import time
 
         client = self._get_client()
         if client is None:
@@ -164,6 +188,7 @@ class GroqReconstructor:
             "Updated Merged Memory:\n"
         )
 
+        t0 = time.perf_counter()
         try:
             completion = client.chat.completions.create(
                 messages=[
@@ -172,14 +197,54 @@ class GroqReconstructor:
                 ],
                 model=self._merge_model,
                 temperature=_MERGE_TEMPERATURE,
+                max_completion_tokens=850,
             )
             merged = (completion.choices[0].message.content or "").strip()
+            return merged or f"{current_memory}\n{new_ocr_text}".strip()
+        except TypeError:
+            # Older client fallback if max_completion_tokens is unsupported in older sdk
+            completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": _MERGE_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                model=self._merge_model,
+                temperature=_MERGE_TEMPERATURE,
+                max_tokens=850,
+            )
+            merged = (completion.choices[0].message.content or "").strip()
+            return merged or f"{current_memory}\n{new_ocr_text}".strip()
         except Exception as error:
+            elapsed = time.perf_counter() - t0
+            retry_after = _extract_retry_after(error)
+            remaining_budget = MAX_MERGE_BLOCKING_BUDGET - elapsed
+
+            if retry_after is not None and 0 < retry_after <= remaining_budget:
+                logger.info(
+                    "Groq 429 rate limit: waiting %0.2fs within budget before single retry",
+                    retry_after,
+                )
+                time.sleep(retry_after)
+                try:
+                    completion = client.chat.completions.create(
+                        messages=[
+                            {"role": "system", "content": _MERGE_SYSTEM_PROMPT},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        model=self._merge_model,
+                        temperature=_MERGE_TEMPERATURE,
+                        max_completion_tokens=850,
+                    )
+                    merged = (completion.choices[0].message.content or "").strip()
+                    return merged or f"{current_memory}\n{new_ocr_text}".strip()
+                except Exception as retry_err:
+                    logger.warning(
+                        "Groq merge retry failed (%s); appending raw OCR text", retry_err
+                    )
+                    return f"{current_memory}\n{new_ocr_text}".strip()
+
             logger.warning("Groq merge failed (%s); appending raw OCR text", error)
             return f"{current_memory}\n{new_ocr_text}".strip()
-
-        # An empty completion would silently erase the page.
-        return merged or f"{current_memory}\n{new_ocr_text}".strip()
 
     def is_same_page(self, active_memory: str, raw_ocr: str) -> bool:
         """Whether a frame is still the page already being held.
@@ -218,7 +283,15 @@ class GroqReconstructor:
                 messages=[{"role": "user", "content": prompt}],
                 model=self._page_check_model,
                 temperature=0.0,
-                max_tokens=5,
+                max_completion_tokens=10,
+            )
+            answer = (response.choices[0].message.content or "").strip().upper()
+        except TypeError:
+            response = client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model=self._page_check_model,
+                temperature=0.0,
+                max_tokens=10,
             )
             answer = (response.choices[0].message.content or "").strip().upper()
         except Exception as error:

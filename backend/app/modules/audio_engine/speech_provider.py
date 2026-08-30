@@ -262,18 +262,29 @@ class OfflineSpeechProvider:
     def __init__(self, voice_id: str | None = None) -> None:
         self._voice_id = voice_id
 
-    def _speak_blocking(self, text: str, profile: AudioProfile, voice_id: str | None) -> None:
+    def _render_wav_blocking(
+        self, text: str, profile: AudioProfile, voice_id: str | None
+    ) -> bytes:
+        import tempfile
         import pyttsx3
 
         engine = pyttsx3.init()
-        # pyttsx3 rate is words per minute; ~200 is its default.
         engine.setProperty("rate", int(200 * profile.rate))
         chosen = voice_id or self._voice_id
         if chosen:
             engine.setProperty("voice", chosen)
-        engine.say(text)
-        engine.runAndWait()
-        engine.stop()
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
+            temp_path = Path(handle.name)
+
+        try:
+            engine.save_to_file(text, str(temp_path))
+            engine.runAndWait()
+            engine.stop()
+            with open(temp_path, "rb") as f:
+                return f.read()
+        finally:
+            temp_path.unlink(missing_ok=True)
 
     async def synthesize(self, request: SpeechRequest) -> SpeechResponse:
         try:
@@ -285,15 +296,18 @@ class OfflineSpeechProvider:
             )
 
         try:
-            await asyncio.to_thread(
-                self._speak_blocking, request.text, request.profile, request.voice_id
+            wav_bytes = await asyncio.to_thread(
+                self._render_wav_blocking, request.text, request.profile, request.voice_id
             )
         except Exception as e:  # noqa: BLE001 — surfaced to the caller
             logger.warning("Offline synthesis failed: %s", e)
             return SpeechResponse(provider=self.provider_name, error=str(e))
 
-        # Audio already went to the speaker; nothing for the sink to play.
-        return SpeechResponse(audio=None, provider=self.provider_name)
+        return SpeechResponse(
+            audio=wav_bytes,
+            content_type="audio/wav",
+            provider=self.provider_name,
+        )
 
     async def get_available_voices(self) -> list[Voice]:
         try:
