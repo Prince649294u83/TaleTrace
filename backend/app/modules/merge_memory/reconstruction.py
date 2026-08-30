@@ -164,7 +164,7 @@ class GroqReconstructor:
         except ImportError:  # pragma: no cover - exercised by absence
             logger.warning("groq package is not installed; merging raw OCR text instead")
             return None
-        self._client = Groq(api_key=self._api_key)
+        self._client = Groq(api_key=self._api_key, max_retries=0)
         return self._client
 
     def __call__(self, current_memory: str, new_ocr_text: str) -> str:

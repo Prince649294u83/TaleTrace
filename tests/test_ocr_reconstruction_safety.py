@@ -255,3 +255,39 @@ def test_20_sequence_merge_stress_preserves_reading_continuity():
     assert len(client.calls) >= 20  # initial calls + transient retries
 
 
+def test_groq_reconstructor_client_config_max_retries_zero():
+    """Verify GroqReconstructor configures the underlying SDK with max_retries=0."""
+    from backend.app.modules.merge_memory.reconstruction import GroqReconstructor
+
+    reconstructor = GroqReconstructor(api_key="gsk_test_fake_key")
+    client = reconstructor._get_client()
+    assert client is not None
+    assert getattr(client, "max_retries", None) == 0
+
+
+def test_groq_reconstructor_immediate_429_budget_enforcement():
+    """Verify an HTTP 429 exception with 5s retry-after falls back immediately within budget."""
+    import time
+    from backend.app.modules.merge_memory.reconstruction import GroqReconstructor
+
+    class _Immediate429Client:
+        def __init__(self):
+            self.chat = self
+            self.completions = self
+
+        def create(self, **kwargs):
+            # Simulate Groq 429 RateLimitError
+            raise RuntimeError("Rate limit reached. Please try again in 5.0s.")
+
+    reconstructor = GroqReconstructor(client=_Immediate429Client())
+    t0 = time.perf_counter()
+    result = reconstructor("Held page text.", "New OCR text.")
+    elapsed = time.perf_counter() - t0
+
+    # Must fall back to appending raw OCR text in under 1.5s (should be < 50ms)
+    assert elapsed < 0.1, f"Fallback took {elapsed}s, expected near-zero delay"
+    assert "Held page text." in result
+    assert "New OCR text." in result
+
+
+
