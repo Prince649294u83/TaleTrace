@@ -1,9 +1,10 @@
 # AI Handoff & Technical Context Specification
 
 > **Primary Handoff File:** [AGENTS.md](file:///E:/Projects/TaleTrace/AGENTS.md)
+> **Main Hardware Firmware File:** [buttons_and_oled.ino](file:///E:/Projects/TaleTrace/buttons_and_oled.ino)
 > **Active Working Branch:** `Latest-changes-test` (resolves from `85e83d3f1e73efc4d6bddc48239d08eafe655b29`)
 > **Software Shadow Verification Gate:** 100% Green (835 pytest passed, 11 vitest passed, `verify_all.py` passed)
-> **Physical Hardware Verification Gate:** Ready for staged execution (Phases C7–C12)
+> **Physical Hardware Verification Gate:** Ready for staged execution (Phases C7–C12 and H1–H7)
 
 ---
 
@@ -12,10 +13,13 @@
 TaleTrace is a physical smart bookmark powered by an ESP32-CAM, physical buttons (MOMENTARY for gesture word pointing, TOGGLE for Meaning Mode lookup), an OLED display, and audio output (TTS narration and Novel Mode ambient soundscapes).
 
 ```text
-Physical Hardware Rig (ESP32-CAM + Buttons + OLED + Books)
+Physical Hardware Rig (ESP32-CAM + Buttons/OLED + Books)
          │
-         ▼  (HTTP REST / JPEG Stream)
-Backend Pipeline (FastAPI, Google Vision OCR, MediaPipe Gestures, Groq Key 1/2, SQLite)
+         ▼  (Local Wi-Fi LAN Only: HTTP JPEG / JSON)
+Hardware Firewall Gateway on Laptop
+         │
+         ▼
+Backend Pipeline (OpenCV, Google Vision OCR, MediaPipe Gestures, Groq Key 1/2/3, SQLite)
          │
          ▼  (REST API / JSON)
 Frontend Companion Web App (React, Tailwind CSS, Recharts) - *Review App Only*
@@ -29,19 +33,22 @@ Frontend Companion Web App (React, Tailwind CSS, Recharts) - *Review App Only*
 2. **Groq Keys:**
    - `GROQ_API_KEY_1`: AI Engine (Meaning Mode, explanations, end-of-session reviews).
    - `GROQ_API_KEY_2`: Merge Memory (`GroqReconstructor`, text formatting).
-   - Strictly segregated. Never merge or share.
+   - `GROQ_API_KEY_3`: Learning Engine (Vocabulary evaluation).
+   - Strictly segregated on the laptop host. Never merge or share.
 3. **Reference Specification:** `backend/app/OCRandGESTURE/` is a frozen reference specification.
-4. **Google Vision OCR:** Only production OCR engine. JSON replay is for tests only.
-5. **Focus Analytics Terminology:** Strictly "Reading Focus Analysis" and "Possible Idle Time". Never "Distraction Detection".
-6. **Valid Frame Gate:** 6-gate checklist mandatory before investigating any gesture or selector algorithm changes:
+4. **Main Hardware File:** `buttons_and_oled.ino` at repo root is the primary hardware file (GPIO 4, GPIO 5, SH1106 OLED).
+5. **Architectural Invariant:** ESP32 = peripheral, Laptop = brain. ESP32s stay on local LAN and never touch cloud services.
+6. **Google Vision OCR:** Only production OCR engine. JSON replay is for tests only.
+7. **Focus Analytics Terminology:** Strictly "Reading Focus Analysis" and "Possible Idle Time". Never "Distraction Detection".
+8. **Valid Frame Gate:** 6-gate checklist mandatory before investigating any gesture or selector algorithm changes:
    - Gate 1: HTTP 200 JPEG.
    - Gate 2: OpenCV decoding.
    - Gate 3: Valid OCR word bounding boxes.
    - Gate 4: Matching coordinate spaces.
    - Gate 5: Fingertip observation.
    - Gate 6: Proof that selector chose the wrong candidate.
-7. **Camera Drop Invariant:** A physical `NO_FRAME` is never a gesture failure. It aborts the transaction cleanly as `CAMERA_UNAVAILABLE` without changing the reading pointer or OLED display.
-8. **Audio Invariant:** `attempted != spoken`. `words_spoken` only increments and pointer only advances upon complete, uninterrupted playback.
+9. **Camera Drop Invariant:** A physical `NO_FRAME` is never a gesture failure. It aborts the transaction cleanly as `CAMERA_UNAVAILABLE` without changing the reading pointer or OLED display.
+10. **Audio Invariant:** `attempted != spoken`. `words_spoken` only increments and pointer only advances upon complete, uninterrupted playback on the laptop host. ESP32 is NOT an audio transport.
 
 ---
 
@@ -114,15 +121,18 @@ Frontend Companion Web App (React, Tailwind CSS, Recharts) - *Review App Only*
 
 ---
 
-## 4. Physical Rig Execution Sequence (Phases C7–C12)
+## 4. Physical Rig Execution Sequence (Phases C7–C12 and H1–H7)
 
 ```text
 Phase C7: Preflight & Environment Cleanup
   ├── Remove temporary test variables: ESP32_CAM_CAPTURE_URL, ESP32_BUTTONS_URL, etc.
   └── python -m backend.app.live_session --check
 
+Phase H1: 4-Layer Physical Baseline Load Protocol
+  └── python scripts/diagnose_camera.py (Layer 0 Idle, Layer 1 Pure, Layer 2 Cadence, Layer 3 Contention)
+
 Phase C8: Physical Camera & Coordinate Gate
-  └── python scripts/diagnose_camera.py (verify P99, failure rate, OpenCV decode)
+  └── Verify live frame acquisition, OpenCV BGR decode, and canonical transform (1200x1600).
 
 Phase C9: Staged Gesture & Reading Runs
   ├── 5s smoke test:      python -m backend.app.live_session --buttons hardware --seconds 5

@@ -30,11 +30,13 @@ These are standing, immutable constraints. Breaking any of these invalidates the
    - `GROQ_API_KEY_2` is for **Merge Memory / Text Reconstruction only** (`GroqReconstructor`).
    - They must remain separate so rate limits on the live capture merge loop cannot starve the reader's Meaning Mode lookups.
 3. **`backend/app/OCRandGESTURE/` is a Frozen Reference Specification.** It is the original prototype and functional spec. Read it; never edit it.
-4. **Google Vision is the Only Production OCR Engine.** JSON replay is a test-only fixture adapter. Never present replay as a production engine or add third-party OCR engines to production paths.
-5. **Terminology: "Reading Focus Analysis" Only.** Never use "Distraction Detection". Idle time is worded "Possible Idle Time" and "reading paused longer than expected" — never accusatory.
-6. **Greyscale Images are Unusable.** MediaPipe and the pipeline require color images. For synthetic testing, use `scripts/synthetic_page.py`.
-7. **Git Branch & Push Target.** The active working branch is `Latest-changes-test` (or `origin/Latest-changes` when requested). Never push to `main`.
-8. **Core Algorithm Freeze.** Do **NOT** modify Gesture Engine mathematics, tracking filters, selector scoring weights, OCR drop-cap heuristics, or database schema without a reproducing test that passes the **Valid Frame Gate**.
+4. **Main Hardware File**: `E:\Projects\TaleTrace\buttons_and_oled.ino` is the authoritative primary hardware firmware file (GPIO4, GPIO5, SH1106 OLED).
+5. **Architectural Rule: ESP32 = Peripheral, Laptop = Brain.** ESP32 devices communicate over local LAN only and never touch cloud services. The laptop performs all OpenCV, OCR, MediaPipe, Groq AI, TTS narration, ambient mixing, and database persistence.
+6. **Google Vision is the Only Production OCR Engine.** JSON replay is a test-only fixture adapter. Never present replay as a production engine or add third-party OCR engines to production paths.
+7. **Terminology: "Reading Focus Analysis" Only.** Never use "Distraction Detection". Idle time is worded "Possible Idle Time" and "reading paused longer than expected" — never accusatory.
+8. **Greyscale Images are Unusable.** MediaPipe and the pipeline require color images. For synthetic testing, use `scripts/synthetic_page.py`.
+9. **Git Branch & Push Target.** The active working branch is `Latest-changes-test` (or `origin/Latest-changes` when requested). Never push to `main`.
+10. **Core Algorithm Freeze.** Do **NOT** modify Gesture Engine mathematics, tracking filters, selector scoring weights, OCR drop-cap heuristics, or database schema without a reproducing test that passes the **Valid Frame Gate**.
 
 ---
 
@@ -81,6 +83,8 @@ ESP32-CAM JPEG Frame
 
 | Module / Entry Point | File Path | Role & Invariants |
 |---|---|---|
+| **Main Hardware File** | `buttons_and_oled.ino` | Authoritative firmware for GPIO 4, GPIO 5, and SH1106 OLED display. |
+| **ESP32-CAM Firmware** | `backend/app/OCRandGESTURE/espcam/Almost_final.ino` | Optical image capture firmware (`GET /capture`). |
 | **Live Session** | `backend/app/live_session.py` | Real hardware entry point. `--check` performs preflight. |
 | **Simulated Session** | `backend/app/simulated_session.py` | Headless execution without physical peripherals. |
 | **FastAPI Backend** | `backend/app/main.py` | Companion API, device endpoints, and CORS config. |
@@ -90,7 +94,7 @@ ESP32-CAM JPEG Frame
 | **Merge Memory** | `backend/app/modules/merge_memory/reconstruction.py` | `GroqReconstructor` with `max_completion_tokens=850` and 1.5s non-blocking budget. |
 | **Gesture Engine** | `backend/app/modules/gesture_engine/` | `detector.py`, `selector.py`, `tracker.py`, `transaction.py`. |
 | **Analysis Module** | `backend/app/modules/database/analysis.py` | Computes aggregation for companion dashboard charts. |
-| **Camera Diagnostics**| `scripts/diagnose_camera.py` | Statistical diagnostic tool (Phases A, B, C, D with OpenCV decode). |
+| **Camera Diagnostics**| `scripts/diagnose_camera.py` | Statistical diagnostic tool (4-layer H1 measurement protocol). |
 | **Verification Gate** | `scripts/verify_all.py` | Official end-to-end test runner. |
 
 ---
@@ -192,7 +196,7 @@ A clean book page without a hand present must **never** produce an actionable wo
 
 ---
 
-## 7. Next Immediate Work: Staged Physical Hardware Validation (Phases C7–C12)
+## 7. Staged Physical Hardware Validation & H0–H8 Research Protocols
 
 When validating on the physical hardware rig, execute strictly in this order:
 
@@ -201,6 +205,8 @@ When validating on the physical hardware rig, execute strictly in this order:
 │                      STAGED PHYSICAL VALIDATION GATES                       │
 ├─────────┬─────────────────────────┬─────────────────────────────────────────┤
 │ Phase C7│ Physical Preflight      │ Clear test env vars, hardware preflight │
+│ Phase H1│ Baseline Load Profiling │ 4-Layer measurement (Idle, Pure, Cadence│
+│         │                         │ Contention: scripts/diagnose_camera.py) │
 │ Phase C8│ Camera & Coordinates    │ Live frame capture & canonical transform│
 │ Phase C9│ Physical Gesture Gates  │ 5s smoke -> 30s -> 60s -> 120s final    │
 │ Phase C10 Physical Audio Gates    │ Live TTS, ambient crossfade, reconnect  │
@@ -220,9 +226,9 @@ Remove-Item Env:\AUDIO_PROVIDER -ErrorAction SilentlyContinue
 python -m backend.app.live_session --check
 ```
 
-### Phase C8: Camera Diagnostics on the Rig
+### Phase H1: Camera Diagnostics on the Rig
 ```powershell
-# Run the 4-phase statistical camera diagnostic tool
+# Run the 4-layer statistical camera diagnostic tool
 python scripts/diagnose_camera.py
 ```
 
